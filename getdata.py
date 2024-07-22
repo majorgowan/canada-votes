@@ -9,7 +9,9 @@ Email:   mark.fruman@yahoo.com
 import os
 import requests
 from urllib.parse import urljoin
-from constants import datadir, provcodes
+from .constants import datadir, provcodes
+from .utils import update_riding_map_file
+
 
 def download_file(fileurl, overwrite=False):
     """
@@ -66,7 +68,32 @@ def get_vote_data(province="ON", overwrite=False):
     fileurl = urljoin(base_url, filename)
 
     result = download_file(fileurl, overwrite)
+
+    # generate riding name -> number map
+    update_riding_map_file(province)
+
     return result
+
+
+def get_all_vote_data(overwrite=False):
+    """
+    Download vote data from all provinces and territories
+
+    Parameters
+    ----------
+    overwrite : bool
+
+    Returns
+    -------
+    str
+        names of downloaded files (comma delimited)
+    """
+    result_list = []
+    for province in provcodes:
+        result = get_vote_data(province, overwrite=overwrite)
+        if result is not None:
+            result_list.append(result)
+    return ",".join(result_list)
 
 
 def get_geometries(advance=False, overwrite=False):
@@ -91,9 +118,9 @@ def get_geometries(advance=False, overwrite=False):
                  + "Elections_Canada_2021/")
     pdf_filename = "Elections_Canada_2021_Data_Dictionary.pdf"
     if advance:
-        filename = "PD_CA_2021_EN.zip"
-    else:
         filename = "ADVPD_CA_2021_EN.zip"
+    else:
+        filename = "PD_CA_2021_EN.zip"
 
     # download data dictionary file
     pdf_result = download_file(urljoin(base_url, pdf_filename), overwrite)

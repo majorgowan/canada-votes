@@ -13,7 +13,25 @@ import shutil
 import pandas as pd
 import geopandas as gpd
 from zipfile import ZipFile
-from constants import datadir, provcodes
+from .constants import datadir, provcodes, areas
+
+
+def get_int_part(s):
+    """
+
+    Parameters
+    ----------
+    s : str
+        containing integer part
+
+    Returns
+    -------
+    int
+    """
+    mch = re.match(r"[a-zA-Z]*[0-9]+", s.strip())
+    if mch is not None:
+        return int(mch[0])
+    return None
 
 
 def write_json(obj, filename, **json_args):
@@ -22,12 +40,12 @@ def write_json(obj, filename, **json_args):
 
     Parameters
     ----------
-    obj : json-serializable object
+    obj : json-serializable
         object to be written as json
     filename : str
         name of file to write
     **json_args
-        kwargs for json.dump function
+        kwargs for json.dump() function
 
     Returns
     -------
@@ -36,10 +54,33 @@ def write_json(obj, filename, **json_args):
     if not filename.lower().endswith(".json"):
         filename = f"{filename}.json"
     with open(filename, "w") as jsf:
-        json.dump(obj, jsf)
+        json.dump(obj, jsf, **json_args)
 
 
-def generate_riding_map_file(province="ON", overwrite=False):
+def load_json(filepath):
+    """
+    Load a json file to an object
+
+    Parameters
+    ----------
+    filepath : str
+        path to json file to load
+
+    Returns
+    -------
+    object
+        serialized in json file
+    """
+    if not filepath.lower().endswith(".json"):
+        filepath = f"{filepath}.json"
+
+    with open(filepath, "r") as jsf:
+        json_obj = json.load(jsf)
+
+    return json_obj
+
+
+def update_riding_map_file(province):
     """
     Generate a json file mapping riding names (e.g. "Thornhill")
     to riding numbers (35104)
@@ -48,27 +89,23 @@ def generate_riding_map_file(province="ON", overwrite=False):
     ----------
     province : str
         two-letter abbreviation
-    overwrite : bool
-        if True, overwrite existing file
 
     Returns
     -------
     str
         name of created file
     """
-    riding_map = dict()
+    # if riding_map file exists, load it
+    riding_map_file = os.path.join(datadir, "riding_map.json")
+    if os.path.exists(riding_map_file):
+        riding_map = load_json(riding_map_file)
+    else:
+        riding_map = dict()
+
     provcode = provcodes[province]
-
-    filename = os.path.join(datadir,
-                            f"{province}_{provcode}_ridings_map")
-
-    if not overwrite and os.path.exists(filename):
-        print(f"{filename} exists")
-        return
 
     votesfile = os.path.join(datadir,
                              f"pollresults_resultatsbureau{provcode}.zip")
-    print(votesfile)
 
     if not os.path.exists(votesfile):
         print("Please first download votes file with get_vote_data()")
@@ -83,7 +120,80 @@ def generate_riding_map_file(province="ON", overwrite=False):
                 riding_number, riding_name = temp_df.iloc[0, :2].values
                 riding_map[riding_name] = int(riding_number)
 
-    write_json(riding_map, filename, indent=2, sort_keys=True)
+    # write updated riding_map back to disk
+    write_json(riding_map, riding_map_file, indent=2, sort_keys=True)
+
+
+def get_riding_map():
+    """
+    Load riding map from disk
+
+    Returns
+    -------
+    dict
+    """
+    return load_json(os.path.join(datadir, "riding_map.json"))
+
+
+def get_inv_riding_map():
+    """
+    Load inverse riding map
+
+    Returns
+    -------
+    dict
+    """
+    riding_map = get_riding_map()
+    return {v: k for k, v in riding_map.items()}
+
+
+def provs_from_ridings(ridings):
+    """
+    get list of province numeric codes from list of riding names
+
+    Parameters
+    ----------
+    ridings : list
+        riding names
+
+    Returns
+    -------
+    list
+        province codes
+    """
+    riding_map = get_riding_map()
+    provcode_list = []
+    riding_codes = []
+    for rid in ridings:
+        riding_codes.append(riding_map[rid])
+        provcode = int(str(riding_map[rid])[:2])
+        if provcode not in provcode_list:
+            provcode_list.append(provcode)
+    return provcode_list
+
+
+def apply_riding_map(ridings=None, area=None):
+    """
+    convert list of riding names or area to list of riding numbers
+
+    Parameters
+    ----------
+    ridings : list
+        riding names
+    area : str
+        name of predefined area
+
+    Returns
+    -------
+    list
+    """
+    riding_map = get_riding_map()
+    if ridings is None:
+        if area is None:
+            return []
+        ridings = areas[area]
+
+    return [riding_map[rid] for rid in ridings]
 
 
 def generate_provincial_geometries():
@@ -101,22 +211,21 @@ def generate_provincial_geometries():
 
     for gdffile, suffix in [(eday_file, "geometries"),
                             (adv_file, "geometries_adv")]:
-
-        # load geodataframe
-        gdf = gpd.read_file(os.path.join(datadir, adv_file))
+        # load GeoDataFrame
+        gdf = gpd.read_file(os.path.join(datadir, gdffile))
 
         for prov, provcode in provcodes.items():
             # iterate over provinces, generate subset dataframe
             # and write it to zip file
-            gdf_prov = (gdf[gdf["FED_NUM"]
-                        .astype(str).str.startswith(f"{provcode}")]
-                        .to_crs(epsg=4326))
-
             prov_filename = f"{prov}_{provcode}_{suffix}"
             if os.path.exists(os.path.join(datadir,
                                            f"{prov_filename}.zip")):
                 print(f"file {prov_filename} already exists, skipping... ")
                 continue
+
+            gdf_prov = (gdf[gdf["FED_NUM"]
+                        .astype(str).str.startswith(f"{provcode}")]
+                        .to_crs(epsg=4326))
 
             # make folder for shape files
             os.mkdir(os.path.join(datadir, prov_filename))
