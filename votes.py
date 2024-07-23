@@ -33,6 +33,10 @@ def load_vote_data_prov(province):
 
     df = pd.DataFrame()
 
+    french_columns = [
+        "Electoral District Name_French/Nom de circonscription_Français",
+        "Political Affiliation Name_French/Appartenance politique_Français"
+    ]
     dtype_map = {
         "Merge With/Fusionné avec": "str",
         "Polling Station Number/Numéro du bureau de scrutin": "str"
@@ -75,6 +79,9 @@ def load_vote_data_prov(province):
                 temp_df = pd.read_csv(zf.open(fname), dtype=dtype_map)
                 df = pd.concat((df, temp_df), ignore_index=True)
 
+    # drop redundant French columns
+    df = df.drop(french_columns, axis=1)
+
     # apply some sanity-preserving column renaming
     df = df.rename(columns=column_renaming_map)
 
@@ -89,7 +96,8 @@ def load_vote_data_prov(province):
                    .rename(columns={"Votes": "TotalVotes"}))
     df = df.merge(df_totvotes, on=["DistrictName", "Poll"], how="left")
 
-    # create a column with the numeric part of the poll number to merge with the geodataframes
+    # create a column with the numeric part of the poll number for merging
+    # with the GeoDataFrames
     df["PD_NUM"] = df["Poll"].map(get_int_part).astype("int")
 
     return df
@@ -122,3 +130,65 @@ def load_vote_data(ridings=None, area=None):
         df = pd.concat((df, temp_df), ignore_index=True)
 
     return df
+
+
+def compute_vote_fraction(df_vote):
+    """
+    Calculate fraction of votes earned by each candidate
+
+    Parameters
+    ----------
+    df_vote : pd.DataFrame
+        containing vote data
+
+    Returns
+    -------
+    pd.DataFrame or gpd.GeoDataFrame
+    """
+    # Compute fraction of all (potential) electors and fraction of all voters
+    df_vote["PotentialVoteFraction"] = (df_vote["Votes"]
+                                        .divide(df_vote["Electors"]))
+    df_vote["VoteFraction"] = (df_vote["Votes"]
+                               .divide(df_vote["TotalVotes"]))
+    return df_vote
+
+
+def add_eday_votes(gdf_eday, gdf_advance):
+    """
+    add election-day votes to the associated advance poll rows
+
+    Parameters
+    ----------
+    gdf_eday : gpd.GeoDataFrame
+        with election-day polling station boundaries
+    gdf_advance : gpd.GeoDataFrame
+        with advance-poll station boundaries
+
+    Returns
+    -------
+    gdf_advance
+        with new column for election day votes
+    """
+    gdf_eday_votes = (gdf_eday
+                      .get(["DistrictName", "Party",
+                            "ADV_POLL_N", "Votes", "TotalVotes"])
+                      .groupby(["DistrictName", "Party",
+                                "ADV_POLL_N"],
+                               as_index=False)
+                      .sum()
+                      .rename(columns={"ADV_POLL_N": "PD_NUM",
+                                       "Votes": "ElectionDayVotes",
+                                       "TotalVotes": "TotalElectionDayVotes"}))
+    gdf_advance = (gdf_advance
+                   .merge(gdf_eday_votes,
+                          on=["DistrictName", "Party", "PD_NUM"],
+                          how="left"))
+
+    # compute total vote fraction
+    gdf_advance["AllVoteFraction"] = (
+        (gdf_advance["Votes"] + gdf_advance["ElectionDayVotes"])
+        .divide((gdf_advance["TotalVotes"]
+                 + gdf_advance["TotalElectionDayVotes"]))
+    )
+
+    return gdf_advance

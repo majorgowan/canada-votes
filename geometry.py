@@ -10,7 +10,7 @@ import os
 import pandas as pd
 import geopandas as gpd
 from .constants import codeprovs, datadir, areas
-from .utils import provs_from_ridings, apply_riding_map
+from .utils import provs_from_ridings, apply_riding_map, get_int_part
 
 
 def load_geometries(ridings=None, area=None, advance=False):
@@ -57,6 +57,11 @@ def load_geometries(ridings=None, area=None, advance=False):
 
     gdf = gdf[gdf["FED_NUM"].isin(riding_codes)]
 
+    # change poll number and advance poll number to integer type
+    if "PD_NUM" in gdf.columns:
+        gdf["PD_NUM"] = gdf["PD_NUM"].astype("int64")
+    gdf["ADV_POLL_N"] = gdf["ADV_POLL_N"].astype("int64")
+
     return gdf
 
 
@@ -86,3 +91,62 @@ def dissolve_ridings(gdf):
 
     return gdf
 
+
+def merge_votes(gdf, df_vote):
+    """
+    Merge election results into a GeoDataFrame
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        geometry data
+    df_vote : pd.DataFrame
+        votes data
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        geometry data with merged votes data
+    """
+    # detect whether geometry data is for advance poll
+    if "PD_NUM" in gdf.columns:
+        advance = False
+    else:
+        advance = True
+
+    if not advance:
+        # merge votes to geodataframe on the numeric part of the Poll
+        gdf = gdf.merge(df_vote,
+                        left_on=["FED_NUM", "PD_NUM"],
+                        right_on=["DistrictNumber", "PD_NUM"],
+                        how="left")
+
+        # dissolve polling stations with votes merged
+        # if a poll is not merged with another,
+        # then it is "merged" with itself
+        gdf["MergedWith"] = [row["Poll"].strip()
+                             if pd.isna(row["MergedWith"])
+                             else row["MergedWith"]
+                             for _, row in gdf.iterrows()]
+
+        # create integer column with numeric part of "MergedWith" column
+        gdf["MGDW_NUM"] = gdf["MergedWith"].map(get_int_part)
+
+        # create geometry for groups of merged polls
+        # the number of votes should only be non-zero for the target
+        # of the merge
+        gdf = gdf.dissolve(by=["DistrictName", "Party", "MGDW_NUM"],
+                           aggfunc={"Electors": "sum",
+                                    "Votes": "max",
+                                    "TotalVotes": "max"})
+
+    else:
+        # merge votes to geodataframe on the Advance Poll number
+        gdf = gdf.merge(df_vote,
+                        left_on=["FED_NUM", "ADV_POLL_N"],
+                        right_on=["DistrictNumber", "PD_NUM"],
+                        how="left")
+        # set index to conform to election-day format
+        gdf = gdf.set_index(["DistrictName", "Party", "ADV_POLL_N"])
+
+    return gdf

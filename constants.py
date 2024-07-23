@@ -29,6 +29,15 @@ provcodes = {
 
 codeprovs = {v: k for k, v in provcodes.items()}
 
+partycolours = {
+    "Conservative": "darkblue",
+    "Liberal": "red",
+    "Bloc Québécois": "lightblue",
+    "NDP-New Democratic Party": "orange",
+    "Green Party": "green",
+    "People's Party - PPC": "purple"
+}
+
 areas = {
     "downtown_toronto": ["Toronto Centre",
                          "University--Rosedale",
