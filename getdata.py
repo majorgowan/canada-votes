@@ -29,6 +29,10 @@ def download_file(fileurl, overwrite=False):
     str
         local filename
     """
+    # if datadir doesn't exist, create it
+    if not os.path.exists(datadir):
+        os.mkdir(datadir)
+
     filename = fileurl.split("/")[-1]
     localpath = os.path.join(datadir, filename)
 
