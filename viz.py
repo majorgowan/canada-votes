@@ -72,7 +72,7 @@ def ridings_plot(gdf_ridings, labels=False, title=None, **kwargs):
     return axobj
 
 
-def votes_plot(gdf_vote, party, gdf_ridings=None, plot_votefraction=True,
+def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
                figsize=None, ridings_args=None, **kwargs):
     """
     visualize votes for single party by polling station
@@ -85,8 +85,9 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_votefraction=True,
         name of one of the parties
     gdf_ridings : gpd.GeoDataFrame
         with riding-level geometries
-    plot_votefraction : bool
-        if True, plot vote fraction, otherwise plot total votes
+    plot_variable : str
+        one of "VoteFraction", "Votes", "AllVoteFraction",
+               "PotentialVoteFraction"
     figsize : tuple
         size of figure
     ridings_args : dict
@@ -103,18 +104,27 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_votefraction=True,
 
     plt.figure(figsize=figsize)
 
-    if plot_votefraction:
-        plot_column = "VoteFraction"
-        if "VoteFraction" not in gdf_vote.columns:
-            # calculate vote fraction for each party
+    if plot_variable not in gdf_vote.columns:
+        if plot_variable == "VoteFraction":
             gdf_vote = compute_vote_fraction(gdf_vote)
+        else:
+            print(f"{plot_variable} not in dataframe")
+            return
+
+    if "cmap" not in kwargs:
+        partycolour = partycolours.get(party, "black")
+        cmap = (LinearSegmentedColormap
+                .from_list("Custom",
+                            colors = ["white", partycolour],
+                            N=256))
     else:
-        plot_column = "Votes"
+        cmap = kwargs.pop("cmap")
 
     ax = (gdf_vote
           .reset_index("DistrictName")
           .loc[party]
-          .plot(column=plot_column, legend=True, ax=plt.gca(), **kwargs))
+          .plot(column=plot_variable, legend=True, ax=plt.gca(),
+                cmap=cmap, **kwargs))
 
     if gdf_ridings is not None:
         if ridings_args is None:
@@ -130,7 +140,7 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_votefraction=True,
 
 
 def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
-                          plot_votefraction=True,
+                          plot_variable="VoteFraction",
                           figsize=None, ridings_args=None, **kwargs):
     """
     visualize votes for single party by polling station
@@ -163,23 +173,22 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
 
     plt.figure(figsize=figsize)
 
-    if plot_votefraction:
-        plot_column = "VoteFraction"
-        if "VoteFraction" not in gdf_vote.columns:
-            # calculate vote fraction for each party
+    if plot_variable not in gdf_vote.columns:
+        if plot_variable == "VoteFraction":
             gdf_vote = compute_vote_fraction(gdf_vote)
-    else:
-        plot_column = "Votes"
+        else:
+            print(f"{plot_variable} not in dataframe")
+            return
 
     gdf1 = (gdf_vote
             .reset_index("DistrictName")
-            .loc[party1])
+            .loc[party1]).copy()
 
     gdf2 = (gdf_vote
             .reset_index("DistrictName")
             .loc[party2])
 
-    gdf1["Difference"] = gdf1[plot_column] - gdf2[plot_column]
+    gdf1["Difference"] = gdf1[plot_variable] - gdf2[plot_variable]
 
     colour1 = partycolours[party2]
     colour2 = partycolours[party1]

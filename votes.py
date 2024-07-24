@@ -14,6 +14,8 @@ from .constants import datadir, provcodes, codeprovs
 from .utils import get_int_part, apply_riding_map
 
 
+# TODO: allow handling parties with no votes in a poll to not break everything
+
 def load_vote_data_prov(province):
     """
     Load dataframe with vote results from single province
@@ -145,6 +147,8 @@ def compute_vote_fraction(df_vote):
     -------
     pd.DataFrame or gpd.GeoDataFrame
     """
+    df_vote = df_vote.copy()
+
     # Compute fraction of all (potential) electors and fraction of all voters
     df_vote["PotentialVoteFraction"] = (df_vote["Votes"]
                                         .divide(df_vote["Electors"]))
@@ -160,9 +164,9 @@ def add_eday_votes(gdf_eday, gdf_advance):
     Parameters
     ----------
     gdf_eday : gpd.GeoDataFrame
-        with election-day polling station boundaries
+        with election-day polling station boundaries and votes
     gdf_advance : gpd.GeoDataFrame
-        with advance-poll station boundaries
+        with advance-poll station boundaries and votes
 
     Returns
     -------
@@ -190,5 +194,9 @@ def add_eday_votes(gdf_eday, gdf_advance):
         .divide((gdf_advance["TotalVotes"]
                  + gdf_advance["TotalElectionDayVotes"]))
     )
+
+    gdf_advance = gdf_advance.set_index(["DistrictName",
+                                         "Party",
+                                         "PD_NUM"])
 
     return gdf_advance

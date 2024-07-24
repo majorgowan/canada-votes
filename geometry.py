@@ -9,6 +9,7 @@ Email:   mark.fruman@yahoo.com
 import os
 import pandas as pd
 import geopandas as gpd
+from .votes import compute_vote_fraction
 from .constants import codeprovs, datadir, areas
 from .utils import provs_from_ridings, apply_riding_map, get_int_part
 
@@ -121,25 +122,6 @@ def merge_votes(gdf, df_vote):
                         right_on=["DistrictNumber", "PD_NUM"],
                         how="left")
 
-        # dissolve polling stations with votes merged
-        # if a poll is not merged with another,
-        # then it is "merged" with itself
-        gdf["MergedWith"] = [row["Poll"].strip()
-                             if pd.isna(row["MergedWith"])
-                             else row["MergedWith"]
-                             for _, row in gdf.iterrows()]
-
-        # create integer column with numeric part of "MergedWith" column
-        gdf["MGDW_NUM"] = gdf["MergedWith"].map(get_int_part)
-
-        # create geometry for groups of merged polls
-        # the number of votes should only be non-zero for the target
-        # of the merge
-        gdf = gdf.dissolve(by=["DistrictName", "Party", "MGDW_NUM"],
-                           aggfunc={"Electors": "sum",
-                                    "Votes": "max",
-                                    "TotalVotes": "max"})
-
     else:
         # merge votes to geodataframe on the Advance Poll number
         gdf = gdf.merge(df_vote,
@@ -148,5 +130,48 @@ def merge_votes(gdf, df_vote):
                         how="left")
         # set index to conform to election-day format
         gdf = gdf.set_index(["DistrictName", "Party", "ADV_POLL_N"])
+
+    return gdf
+
+
+def combine_mergedwith_columns(gdf):
+    """
+    In some cases multiple poll divisions are counted together, denoted
+    by a non-missing "MergedWith" column in df_vote
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        with merged vote data
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+    """
+    # since we're writing new columns, don't touch passed-in DataFrame
+    gdf = gdf.copy()
+
+    # dissolve polling stations with votes merged
+    # if a poll is not merged with another,
+    # then it is "merged" with itself
+    gdf["MergedWith"] = [row["Poll"].strip()
+                         if pd.isna(row["MergedWith"])
+                         else row["MergedWith"]
+                         for _, row in gdf.iterrows()]
+
+    # reassign "PD_NUM" to numeric part of "MergedWith" column
+    # (old PD_NUM disappears on dissolve below anyway)
+    gdf["PD_NUM"] = gdf["MergedWith"].map(get_int_part)
+
+    # create geometry for groups of merged polls
+    # the number of votes should only be non-zero for the target
+    # of the merge
+    gdf = gdf.dissolve(by=["DistrictName", "Party", "PD_NUM"],
+                       aggfunc={"Electors": "sum",
+                                "Votes": "max",
+                                "TotalVotes": "max"})
+
+    # (re)compute vote fraction with aggregated columns
+    gdf = compute_vote_fraction(gdf)
 
     return gdf
