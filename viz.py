@@ -8,6 +8,7 @@ Email:   mark.fruman@yahoo.com
 """
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+import contextily as cx
 from .utils import get_inv_riding_map
 from .votes import compute_vote_fraction
 from .constants import partycolours
@@ -73,7 +74,7 @@ def ridings_plot(gdf_ridings, labels=False, title=None, **kwargs):
 
 
 def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
-               figsize=None, ridings_args=None, **kwargs):
+               figsize=None, ridings_args=None, basemap=None, **kwargs):
     """
     visualize votes for single party by polling station
 
@@ -92,6 +93,8 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
         size of figure
     ridings_args : dict
         parameters for ridings_plot
+    basemap : str
+        one of "Positron", "Voyager", "Mapnik"
     kwargs
         keyword arguments to GeoDataFrame.plot()
 
@@ -114,11 +117,14 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
     if "cmap" not in kwargs:
         partycolour = partycolours.get(party, "black")
         cmap = (LinearSegmentedColormap
-                .from_list("Custom",
-                            colors = ["white", partycolour],
-                            N=256))
+                .from_list("Custom", colors=["white", partycolour],
+                           N=256))
     else:
         cmap = kwargs.pop("cmap")
+
+    if basemap is not None:
+        # add some transparency so the basemap shows through
+        kwargs["alpha"] = 0.7
 
     ax = (gdf_vote
           .reset_index("DistrictName")
@@ -136,12 +142,27 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
         ridings_args0.update(ridings_args)
         ridings_plot(gdf_ridings, ax=ax, **ridings_args0)
 
+    if basemap is not None:
+        # add basemap from web provider
+        provider = None
+        if basemap == "Mapnik":
+            provider = cx.providers.OpenStreetMap.Mapnik
+        elif basemap == "Voyager":
+            provider = cx.providers.CartoDB.Voyager
+        elif basemap == "Positron":
+            provider = cx.providers.CartoDB.Positron
+        else:
+            print("specified provider not implemented")
+        if provider is not None:
+            cx.add_basemap(ax, crs=gdf_vote.crs, attribution=False,
+                           source=provider)
+
     return ax
 
 
 def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
-                          plot_variable="VoteFraction",
-                          figsize=None, ridings_args=None, **kwargs):
+                          plot_variable="VoteFraction", figsize=None,
+                          ridings_args=None, basemap=None, **kwargs):
     """
     visualize votes for single party by polling station
 
@@ -155,12 +176,15 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
         name of second party to compare
     gdf_ridings : gpd.GeoDataFrame
         with riding-level geometries
-    plot_votefraction : bool
-        if True, plot vote fraction, otherwise plot total votes
+    plot_variable : str
+        one of "VoteFraction", "Votes", "AllVoteFraction",
+               "PotentialVoteFraction"
     figsize : tuple
         size of figure
     ridings_args : dict
         parameters for ridings_plot
+    basemap : str
+        one of "Positron", "Voyager", "Mapnik"
     kwargs
         keyword arguments to GeoDataFrame.plot()
 
@@ -194,14 +218,18 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
     colour2 = partycolours[party1]
     custom_cmap = (LinearSegmentedColormap
                    .from_list("Custom",
-                              colors = [colour1, "white", colour2],
+                              colors=[colour1, "white", colour2],
                               N=256))
 
     crange_max = gdf1["Difference"].abs().max()
 
+    if basemap is not None:
+        # add some transparency so the basemap shows through
+        kwargs["alpha"] = 0.7
+
     ax = (gdf1
           .plot(column="Difference", legend=True, ax=plt.gca(),
-                vmin = -1 * crange_max, vmax=crange_max,
+                vmin=-1 * crange_max, vmax=crange_max,
                 cmap=custom_cmap, **kwargs))
 
     if gdf_ridings is not None:
@@ -213,5 +241,16 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
                          "edgecolor": "gray"}
         ridings_args0.update(ridings_args)
         ridings_plot(gdf_ridings, ax=ax, **ridings_args0)
+
+    if basemap is not None:
+        # add basemap from web provider
+        if basemap == "Mapnik":
+            provider = cx.providers.OpenStreetMap.Mapnik
+        elif basemap == "Voyager":
+            provider = cx.providers.CartoDB.Voyager
+        elif basemap == "Positron":
+            provider = cx.providers.CartoDB.Positron
+        cx.add_basemap(ax, crs=gdf_vote.crs, attribution=False,
+                       source=provider)
 
     return ax
