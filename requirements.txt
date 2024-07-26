@@ -1,4 +1,5 @@
 jupyterlab
 matplotlib
 contextily
+pandas
 geopandas

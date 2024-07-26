@@ -12,6 +12,7 @@ import json
 import shutil
 import pandas as pd
 import geopandas as gpd
+from math import cos, pi
 from zipfile import ZipFile
 from .constants import datadir, provcodes, areas
 
@@ -240,6 +241,101 @@ def generate_provincial_geometries():
                     zf.write(os.path.join(datadir, prov_filename, f),
                              arcname=f)
             shutil.rmtree(os.path.join(datadir, prov_filename))
+
+
+def compute_riding_centroids():
+    """
+    Generate CSV file with riding numbers, names and centroids (in lon/lat)
+    """
+    adv_file = "ADVPD_CA_2021_EN.zip"
+    if not os.path.exists(os.path.join(datadir, adv_file)):
+        print(f"please download shape file {adv_file} with get_geometries()")
+        return
+
+    # load GeoDataFrame
+    gdf = gpd.read_file(os.path.join(datadir, adv_file))
+    # dissolve ridings
+    gdf = gdf.dissolve(by="FED_NUM")
+
+    # switch coordinate system to extract centroid, then switch back
+    gdf = gdf.to_crs(epsg=2263)
+    gdf["centroid"] = gdf.centroid
+    # switch back to longitude/latitude
+    gdf = gdf.to_crs(epsg=4326)
+    gdf["centroid"] = gdf["centroid"].to_crs(epsg=4326)
+
+    gdf["centroid_lon"] = gdf["centroid"].x
+    gdf["centroid_lat"] = gdf["centroid"].y
+
+    inv_riding_map = get_inv_riding_map()
+    gdf["DistrictName"] = gdf.index.map(inv_riding_map)
+
+    # write to JSON file
+    (gdf
+     .reset_index()
+     .get(["FED_NUM", "DistrictName", "centroid_lon", "centroid_lat"])
+     .to_csv(os.path.join(datadir, "riding_centroids.csv"), index=None))
+
+
+def haversine(p1, p2):
+    """
+    Compute haversine distance argument between two points
+
+    Parameters
+    ----------
+    p1 : (float, float)
+        first point in (longitude, latitude) degrees
+    p2 : (float, float)
+        second point
+
+    Returns
+    -------
+    float
+        2 * ( sin( d / (2 R) ) ) ^2
+    """
+    p1 = pi / 180. * p1[0], pi / 180. * p1[1]
+    p2 = pi / 180. * p2[0], pi / 180. * p2[1]
+    dlat = p2[1] - p1[1]
+    dlon = p2[0] - p1[0]
+    return 1.0 - cos(dlat) + cos(p1[1]) * cos(p2[1]) * (1.0 - cos(dlon))
+
+
+def get_nearest_ridings(riding, n=10):
+    """
+    Get list of nearest ridings to given riding (by centroid distance)
+
+    Parameters
+    ----------
+    riding : str
+        name of riding
+    n : int
+        number of ridings to return
+
+    Returns
+    -------
+    list
+        names of nearest ridings
+    """
+    if not os.path.exists(os.path.join(datadir, "riding_centroids.csv")):
+        compute_riding_centroids()
+
+    df_centroids = pd.read_csv(os.path.join(datadir, "riding_centroids.csv"))
+
+    p1 = (df_centroids
+          .loc[df_centroids["DistrictName"] == riding]
+          .get(["centroid_lon", "centroid_lat"])
+          .iloc[0]
+          .values)
+
+    dists = (df_centroids
+             .apply(lambda row: haversine(p1,
+                                          row[["centroid_lon",
+                                               "centroid_lat"]].values),
+                    axis=1)
+             .sort_values())
+    return df_centroids.loc[dists.index[:n], "DistrictName"].tolist()
+
+
 
 
 def validate_ridings(ridings):
