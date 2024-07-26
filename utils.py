@@ -240,3 +240,46 @@ def generate_provincial_geometries():
                     zf.write(os.path.join(datadir, prov_filename, f),
                              arcname=f)
             shutil.rmtree(os.path.join(datadir, prov_filename))
+
+
+def validate_ridings(ridings):
+    """
+    check that list of riding names exist
+
+    Parameters
+    ----------
+    ridings : list
+        names of ridings
+
+    Returns
+    -------
+    list
+        invalid riding names
+    """
+    ridings_map = get_riding_map()
+
+    invalid_ridings = [rid for rid in ridings
+                       if rid not in ridings_map]
+
+    return invalid_ridings
+
+
+def query_ridings(pattern):
+    """
+
+    Parameters
+    ----------
+    pattern : str
+        regex pattern to query list of riding names
+
+    Returns
+    -------
+    list
+        matching riding names
+    """
+    ridings_map = get_riding_map()
+
+    pattern = r"" + pattern
+    matches = [rid for rid in ridings_map
+               if re.match(pattern, rid)]
+    return matches
