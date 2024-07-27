@@ -30,13 +30,14 @@ class CanadaVotes:
             new_ridings += ridings
 
         invalid_ridings = validate_ridings(new_ridings)
-        if invalid_ridings is not None:
+        if len(list(invalid_ridings)) > 0:
             print("the following riding names are invalid:")
             for rid in invalid_ridings:
                 print(f"\t{rid}")
 
         self.ridings += [rid for rid in new_ridings
                          if rid not in invalid_ridings]
+        return self
 
     def load_geometries(self):
         self.gdf_eday = geometry.load_geometries(ridings=self.ridings,
@@ -44,9 +45,11 @@ class CanadaVotes:
         self.gdf_advance = geometry.load_geometries(ridings=self.ridings,
                                                     advance=True)
         self.gdf_ridings = geometry.dissolve_ridings(gdf=self.gdf_advance)
+        return self
 
     def load_votes(self):
         self.vdf = votes.load_vote_data(ridings=self.ridings)
+        return self
 
     def merge_votes(self):
         # election-day polls
@@ -62,6 +65,7 @@ class CanadaVotes:
         # add columns for election-day votes in advance poll areas
         self.gdf_advance = votes.add_eday_votes(self.gdf_eday,
                                                 self.gdf_advance)
+        return self
 
     def load(self):
         """
@@ -70,6 +74,7 @@ class CanadaVotes:
         self.load_geometries()
         self.load_votes()
         self.merge_votes()
+        return self
 
     def plot_votes(self, party, plot_variable="VoteFraction",
                    figsize=None, ridings_args=None, basemap=None,

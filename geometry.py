@@ -159,6 +159,21 @@ def combine_mergedwith_columns(gdf):
                          else row["MergedWith"]
                          for _, row in gdf.iterrows()]
 
+    # this is to handle a bug in some riding vote files where the
+    # rows for the different parties at the same poll
+    # have different "MergedWith" values (some NaN, some non-NaN)
+    # the code below will set the MergedWith value to the majority
+    # value within each poll
+    def grpfun(grp):
+        grp = grp.copy()
+        grpmode = grp["MergedWith"].mode()
+        if len(grpmode) > 0:
+            grp["MergedWith"] = grpmode.iloc[0]
+        return grp
+    gdf = (gdf
+           .groupby(["DistrictName", "PD_NUM"], as_index=False)[gdf.columns]
+           .apply(grpfun))
+
     # reassign "PD_NUM" to numeric part of "MergedWith" column
     # (old PD_NUM disappears on dissolve below anyway)
     gdf["PD_NUM"] = gdf["MergedWith"].map(get_int_part)

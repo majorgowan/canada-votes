@@ -154,6 +154,10 @@ def compute_vote_fraction(df_vote):
                                         .divide(df_vote["Electors"]))
     df_vote["VoteFraction"] = (df_vote["Votes"]
                                .divide(df_vote["TotalVotes"]))
+    # replace any nans with zero (probably total votes were zero)
+    df_vote["VoteFraction"] = df_vote["VoteFraction"].fillna(0.0)
+    df_vote["PotentialVoteFraction"] = (df_vote["PotentialVoteFraction"]
+                                        .fillna(0.0))
     return df_vote
 
 

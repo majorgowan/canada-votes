@@ -336,8 +336,6 @@ def get_nearest_ridings(riding, n=10):
     return df_centroids.loc[dists.index[:n], "DistrictName"].tolist()
 
 
-
-
 def validate_ridings(ridings):
     """
     check that list of riding names exist
