@@ -270,7 +270,7 @@ def compute_riding_centroids():
     inv_riding_map = get_inv_riding_map()
     gdf["DistrictName"] = gdf.index.map(inv_riding_map)
 
-    # write to JSON file
+    # write to CSV file
     (gdf
      .reset_index()
      .get(["FED_NUM", "DistrictName", "centroid_lon", "centroid_lat"])
