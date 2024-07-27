@@ -6,6 +6,7 @@ Author:  Mark Fruman
 Email:   mark.fruman@yahoo.com
 -------------------------------------------------------
 """
+from copy import copy
 from .constants import areas
 from .utils import validate_ridings
 from . import votes, geometry, viz
@@ -18,14 +19,14 @@ class CanadaVotes:
 
         if self.ridings is None:
             if self.area is not None:
-                self.ridings = areas.get(self.area, None)
+                self.ridings = copy(areas.get(self.area, None))
             if self.ridings is None:
                 print("please specify a valid area or list of ridings")
 
     def add_ridings(self, area=None, ridings=None):
         new_ridings = []
         if area is not None:
-            new_ridings += areas.get(area, [])
+            new_ridings += copy(areas.get(area, []))
         if ridings is not None:
             new_ridings += ridings
 
@@ -102,9 +103,68 @@ class CanadaVotes:
                                   figsize=figsize, ridings_args=ridings_args,
                                   basemap=basemap, **kwargs)
 
+    def parties(self):
+        """
+        Returns
+        -------
+        list
+            parties with candidates in the selected ridings
+        """
+        if not hasattr(self, "vdf"):
+            print("please load data first with load() or load_votes()")
+            return None
+        return sorted(self.vdf["Party"].unique().tolist())
+
+    def votes(self, by="Party", key="Votes"):
+        """
+        Parameters
+        ----------
+        by : str
+            either "party" or "candidate"
+        key : str
+            either "Votes" or "Fraction"
+
+        Returns
+        -------
+        pd.DataFrame
+            vote totals
+        """
+        if hasattr(self, "vdf"):
+            if by.lower() == "party":
+                df = (self.vdf
+                      .groupby("Party")
+                      .aggregate({"Votes": "sum", "TotalVotes": "sum"}))
+                df["VoteFraction"] = df["Votes"].divide(df["TotalVotes"])
+                if key.lower() == "fraction":
+                    return df.sort_values("VoteFraction", ascending=False)
+                else:
+                    return df.sort_values("Votes", ascending=False)
+
+            elif by.lower() == "candidate":
+                df = self.vdf.copy()
+                df["Estr"] = (df["ElectedIndicator"]
+                              .map(lambda val: ("  (Elected)" if val == "Y"
+                                                else "")))
+                df["Candidate"] = (df["CandidateLastName"]
+                                   + ", " + df["CandidateFirstName"]
+                                   + df["Estr"])
+                df = (df
+                      .groupby(["Candidate", "Party", "DistrictName"])
+                      .aggregate({"Votes": "sum", "TotalVotes": "sum"}))
+                df["VoteFraction"] = df["Votes"].divide(df["TotalVotes"])
+                if key.lower() == "fraction":
+                    return df.sort_values("VoteFraction", ascending=False)
+                else:
+                    return df.sort_values("Votes", ascending=False)
+            else:
+                print("parameter 'by' must be 'Party' or 'Candidate'")
+        else:
+            print("please load votes data with load() or load_votes()")
+        return None
+
     def __repr__(self):
         return_str = f"CanadaVotes object\n"
-        return_str += f"ridings:\n"
+        return_str += f"Ridings:\n"
         for rid in self.ridings:
             return_str += f"\t{rid}\n"
         for element, description in [("gdf_advance", "Advance poll geometries"),
@@ -115,5 +175,9 @@ class CanadaVotes:
                 return_str += "loaded\n"
             else:
                 return_str += "not loaded\n"
-        return_str += "\n\n"
+        if hasattr(self, "vdf"):
+            return_str += f"Parties:\n"
+            for party in self.parties():
+                return_str += f"\t{party}\n"
+        return_str += "\n"
         return return_str
