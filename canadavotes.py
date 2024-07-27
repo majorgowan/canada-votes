@@ -8,8 +8,8 @@ Email:   mark.fruman@yahoo.com
 """
 from copy import copy
 from .constants import areas
-from .utils import validate_ridings
 from . import votes, geometry, viz
+from .utils import validate_ridings
 
 
 class CanadaVotes:
@@ -79,7 +79,7 @@ class CanadaVotes:
 
     def plot_votes(self, party, plot_variable="VoteFraction",
                    figsize=None, ridings_args=None, basemap=None,
-                   advance=False, **kwargs):
+                   advance=False, filename=None, **kwargs):
         if advance:
             gdf_plot = self.gdf_advance
         else:
@@ -88,10 +88,12 @@ class CanadaVotes:
         viz.votes_plot(gdf_plot, party=party, gdf_ridings=self.gdf_ridings,
                        plot_variable=plot_variable, figsize=figsize,
                        ridings_args=ridings_args, basemap=basemap, **kwargs)
+        if filename is not None:
+            viz.savepng(filename)
 
     def plot_compare(self, party1, party2, plot_variable="VoteFraction",
                      figsize=None, ridings_args=None, basemap=None,
-                     advance=False, **kwargs):
+                     advance=False, filename=None, **kwargs):
         if advance:
             gdf_plot = self.gdf_advance
         else:
@@ -102,6 +104,8 @@ class CanadaVotes:
                                   plot_variable=plot_variable,
                                   figsize=figsize, ridings_args=ridings_args,
                                   basemap=basemap, **kwargs)
+        if filename is not None:
+            viz.savepng(filename)
 
     def parties(self):
         """

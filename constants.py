@@ -10,6 +10,7 @@ import os
 
 basedir = os.path.dirname(__file__)
 datadir = os.path.join(basedir, "data")
+outputdir = os.path.join(basedir, "output")
 
 provcodes = {
     "AB": 48,

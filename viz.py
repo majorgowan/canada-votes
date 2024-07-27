@@ -6,12 +6,29 @@ Author:  Mark Fruman
 Email:   mark.fruman@yahoo.com
 -------------------------------------------------------
 """
+import os
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import contextily as cx
 from .utils import get_inv_riding_map
 from .votes import compute_vote_fraction
-from .constants import partycolours
+from .constants import partycolours, outputdir
+
+
+def savepng(filename):
+    """
+    save current figure to file
+
+    Parameters
+    ----------
+    filename : str
+        filename for figure
+    """
+    if not os.path.exists(outputdir):
+        os.mkdir(outputdir)
+    if not filename.lower().endswith(".png"):
+        filename = f"{filename}.png"
+    plt.savefig(os.path.join(outputdir, filename))
 
 
 def poll_station_plot(gdf, title=None, **kwargs):
@@ -243,6 +260,7 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
         ridings_plot(gdf_ridings, ax=ax, **ridings_args0)
 
     if basemap is not None:
+
         # add basemap from web provider
         if basemap == "Mapnik":
             provider = cx.providers.OpenStreetMap.Mapnik
@@ -250,6 +268,9 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
             provider = cx.providers.CartoDB.Voyager
         elif basemap == "Positron":
             provider = cx.providers.CartoDB.Positron
+        else:
+            print("'basemap' must be one of 'Mapnik', 'Voyager' or 'Positron'")
+            return ax
         cx.add_basemap(ax, crs=gdf_vote.crs, attribution=False,
                        source=provider)
 
