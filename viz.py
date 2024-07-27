@@ -259,6 +259,19 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
         ridings_args0.update(ridings_args)
         ridings_plot(gdf_ridings, ax=ax, **ridings_args0)
 
+    # add party names to colorbar ends
+    cbar = plt.gcf().axes[-1]
+    cbar.text(-0.35, 1.03, s=party1.split(" ")[0].split("-")[0],
+              ha='left', va='center',
+              size=14, color=partycolours[party1],
+              transform=cbar.transAxes)
+    cbar.text(-0.35, -0.03, s=party2.split(" ")[0].split("-")[0],
+              ha='left', va='center',
+              size=14, color=partycolours[party2],
+              transform=cbar.transAxes)
+    cbar.set_title(plot_variable, y=0.5, x=3.3, va="center",
+                   size=14, rotation=-90)
+
     if basemap is not None:
 
         # add basemap from web provider
