@@ -14,7 +14,7 @@ from .constants import codeprovs, datadir, areas
 from .utils import provs_from_ridings, apply_riding_map, get_int_part
 
 
-def load_geometries(ridings=None, area=None, advance=False):
+def load_geometries(ridings=None, area=None, year=2021, advance=False):
     """
     load geopandas file and select subset of ridings
 
@@ -24,6 +24,8 @@ def load_geometries(ridings=None, area=None, advance=False):
         names of ridings to select
     area : str
         name of predefined block of ridings
+    year : int
+        election year for which to load data
     advance : bool
         if True, load geometries for advance polls
 
@@ -49,11 +51,12 @@ def load_geometries(ridings=None, area=None, advance=False):
         province = codeprovs[provcode]
 
         if advance:
-            geometry_file = f"{province}_{provcode}_geometries_adv.zip"
+            geometry_file = f"{year}_{province}_{provcode}_geometries_adv.zip"
         else:
-            geometry_file = f"{province}_{provcode}_geometries.zip"
+            geometry_file = f"{year}_{province}_{provcode}_geometries.zip"
 
-        gdf0 = gpd.read_file(os.path.join(datadir, geometry_file))
+        gdf0 = gpd.read_file(os.path.join(datadir, geometry_file),
+                             encoding="latin1")
         gdf = pd.concat((gdf, gdf0), ignore_index=True)
 
     gdf = gdf[gdf["FED_NUM"].isin(riding_codes)]

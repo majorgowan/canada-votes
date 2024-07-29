@@ -106,7 +106,7 @@ def update_riding_map_file(province):
     provcode = provcodes[province]
 
     votesfile = os.path.join(datadir,
-                             f"pollresults_resultatsbureau{provcode}.zip")
+                             f"2021_pollresults_resultatsbureau{provcode}.zip")
 
     if not os.path.exists(votesfile):
         print("Please first download votes file with get_vote_data()")
@@ -197,36 +197,84 @@ def apply_riding_map(ridings=None, area=None):
     return [riding_map[rid] for rid in ridings]
 
 
-def generate_provincial_geometries():
+def generate_provincial_geometries(year=2021):
     """
     Split the country-wide file into province files (to save memory).
+
+    Parameters
+    ----------
+    year : int
+        year for which to generate provincial geometry files
     """
-    eday_file = "PD_CA_2021_EN.zip"
-    adv_file = "ADVPD_CA_2021_EN.zip"
+    if year == 2015:
+        eday_file = "polling_divisions_boundaries_2015_shp.zip"
+        adv_file = None
+    elif year == 2019:
+        eday_file = "polling_divisions_boundaries_2019.shp.zip"
+        adv_file = "advanced_polling_districts_boundaries_2019.shp.zip"
+    elif year == 2021:
+        eday_file = "PD_CA_2021_EN.zip"
+        adv_file = "ADVPD_CA_2021_EN.zip"
+    else:
+        print(f"year {year} not implemented")
+        return None
+
     if not os.path.exists(os.path.join(datadir, eday_file)):
         print(f"please download shape file {eday_file} with get_geometries()")
         return
-    if not os.path.exists(os.path.join(datadir, adv_file)):
-        print(f"please download shape file {adv_file} with get_geometries()")
-        return
+    if adv_file is not None:
+        if not os.path.exists(os.path.join(datadir, adv_file)):
+            print(f"please download shape file {adv_file} "
+                  + "with get_geometries()")
+            return
 
     for gdffile, suffix in [(eday_file, "geometries"),
                             (adv_file, "geometries_adv")]:
-        # load GeoDataFrame
-        gdf = gpd.read_file(os.path.join(datadir, gdffile))
+        gdf = None
+        if gdffile is not None:
+            # some years might not have both eday and advance files
+            # so that gdffile is None
+
+            # load GeoDataFrame
+            gdf = gpd.read_file(os.path.join(datadir, gdffile),
+                                encoding="latin1")
+
+            # for some reason, in 2019 columns were "FEDNUM" etc. but in 2015
+            # and 2021 they are "FED_NUM" etc.
+            if "FEDNUM" in gdf.columns:
+                gdf = gdf.rename(columns={"FEDNUM": "FED_NUM",
+                                          "PDNUM": "PD_NUM",
+                                          "ADVPOLLNUM": "ADV_POLL_N"})
+            if "ADV_POLL" in gdf.columns:
+                gdf = gdf.rename(columns={"ADV_POLL": "ADV_POLL_N"})
+            if "ADVPOLL" in gdf.columns:
+                gdf = gdf.rename(columns={"ADVPOLL": "ADV_POLL_N"})
 
         for prov, provcode in provcodes.items():
             # iterate over provinces, generate subset dataframe
             # and write it to zip file
-            prov_filename = f"{prov}_{provcode}_{suffix}"
+            prov_filename = f"{year}_{prov}_{provcode}_{suffix}"
             if os.path.exists(os.path.join(datadir,
                                            f"{prov_filename}.zip")):
                 print(f"file {prov_filename} already exists, skipping... ")
                 continue
 
-            gdf_prov = (gdf[gdf["FED_NUM"]
-                        .astype(str).str.startswith(f"{provcode}")]
-                        .to_crs(epsg=4326))
+            if gdf is None:
+                # if gdf is None, it means there is no national advance poll
+                # geometry file, so "dissolve" it from election-day
+                # geometries
+                eday_filename = f"{year}_{prov}_{provcode}_geometries.zip"
+                gdf_prov = gpd.read_file(os.path.join(datadir, eday_filename),
+                                         encoding="latin1")
+                gdf_prov = (gdf_prov
+                            .sort_values(["FED_NUM", "ADV_POLL_N"])
+                            .dissolve(by=["FED_NUM", "ADV_POLL_N"])
+                            .reset_index())
+
+            else:
+                gdf_prov = (gdf[gdf["FED_NUM"]
+                            .astype(str).str.startswith(f"{provcode}")]
+                            .to_crs(epsg=4326))
 
             # make folder for shape files
             os.mkdir(os.path.join(datadir, prov_filename))

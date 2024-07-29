@@ -16,6 +16,13 @@ class CanadaVotes:
     def __init__(self, **kwargs):
         self.area = kwargs.get("area", None)
         self.ridings = kwargs.get("ridings", None)
+        self.years = kwargs.get("years", None)
+        if self.years is None:
+            print("please specify a year or list of years")
+        else:
+            # if years is a single year, set it to a list of length 1
+            if isinstance(self.years, int):
+                self.years = [kwargs.get("years")]
 
         if self.ridings is None:
             if self.area is not None:

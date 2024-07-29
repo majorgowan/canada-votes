@@ -16,12 +16,14 @@ from .utils import get_int_part, apply_riding_map
 
 # TODO: allow handling parties with no votes in a poll to not break everything
 
-def load_vote_data_prov(province):
+def load_vote_data_prov(year, province):
     """
     Load dataframe with vote results from single province
 
     Parameters
     ----------
+    year : int
+        election year from which to load votes
     province : str
         two character province abbreviation
 
@@ -31,7 +33,8 @@ def load_vote_data_prov(province):
     """
     provcode = provcodes[province]
     votesfile = os.path.join(datadir,
-                             f"pollresults_resultatsbureau{provcode}.zip")
+                             f"{year}_pollresults_resultatsbureau{provcode}"
+                             + ".zip")
 
     df = pd.DataFrame()
 
@@ -105,7 +108,7 @@ def load_vote_data_prov(province):
     return df
 
 
-def load_vote_data(ridings=None, area=None):
+def load_vote_data(year=2021, ridings=None, area=None):
     """
 
     Parameters
@@ -126,7 +129,7 @@ def load_vote_data(ridings=None, area=None):
 
     for provcode in pcodes:
         province = codeprovs[provcode]
-        temp_df = load_vote_data_prov(province)
+        temp_df = load_vote_data_prov(year, province)
         # keep only ridings
         temp_df = temp_df[temp_df["DistrictNumber"].isin(riding_codes)]
         df = pd.concat((df, temp_df), ignore_index=True)

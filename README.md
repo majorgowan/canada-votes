@@ -9,13 +9,13 @@ import canadavotes as cdv
 # download vote data
 cdv.get_all_vote_data()
 
-# download geometry files for election-day poll boundaries
-cdv.get_geometries()
+# download geometry files for 2021 election-day poll boundaries
+cdv.get_geometries(year=2021)
 # download geometry files for advance poll boundaries
-cdv.get_geometries(advance=True)
+cdv.get_geometries(year=2021, advance=True)
 
 # generate province-specific geometry files (for speed and memory efficiency)
-cdv.generate_provincial_geometries()
+cdv.generate_provincial_geometries(year=2021)
 ```
 ## Basic usage
 
@@ -185,8 +185,8 @@ victoria.plot_votes(party="Green Party", advance=True,
 ![victoria_proximity Green Voyager](images/victoria_allvotes_Green_with_Voyager.png)
 
 ## References:
-#### Maps of Ontario electoral districts
-- https://www.elections.ca/content.aspx?section=res&dir=cir/maps2/ontario&document=index&lang=e
+#### Maps of electoral districts
+- https://www.elections.ca/content.aspx?section=res&dir=cir/maps2&document=index&lang=e
 
 #### Shape-file data for polling station boundaries
 - Documentation:<BR> https://ftp.maps.canada.ca/pub/elections_elections/Electoral-districts_Circonscription-electorale/Elections_Canada_2021/Elections_Canada_2021_Data_Dictionary.pdf
@@ -195,7 +195,6 @@ victoria.plot_votes(party="Green Party", advance=True,
 
 #### Results for 2021 Canadian federal election
 - https://elections.ca/content.aspx?section=res&dir=rep/off/44gedata&document=bypro&lang=e
-- https://elections.ca/res/rep/off/ovr2021app/53/data_donnees/pollbypoll_bureauparbureau35.zip
 
 #### List of riding names and numbers
-- https://elections.ca/content.aspx?section=res&dir=rep/off/44gedata&document=byed&lang=e#ON
+- https://elections.ca/content.aspx?section=res&dir=rep/off/44gedata&document=byed&lang=e
