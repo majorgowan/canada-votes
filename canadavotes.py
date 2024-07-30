@@ -13,16 +13,20 @@ from .utils import validate_ridings
 
 
 class CanadaVotes:
-    def __init__(self, **kwargs):
+    def __init__(self, years=2021, **kwargs):
         self.area = kwargs.get("area", None)
         self.ridings = kwargs.get("ridings", None)
-        self.years = kwargs.get("years", None)
-        if self.years is None:
-            print("please specify a year or list of years")
-        else:
-            # if years is a single year, set it to a list of length 1
-            if isinstance(self.years, int):
-                self.years = [kwargs.get("years")]
+        self.years = years
+
+        # if years is a single year, set it to a list of length 1
+        if isinstance(self.years, int):
+            self.years = [years]
+
+        for year in self.years:
+            if year not in [2008, 2011, 2015, 2019, 2021]:
+                print("year {year} invalid")
+                print("year must be one of: 2008, 2011, 2015, 2019, 2021")
+                return None
 
         if self.ridings is None:
             if self.area is not None:
@@ -51,12 +55,12 @@ class CanadaVotes:
         return self
 
     def load_geometries(self, year):
-        if year not in self.data:
-            self.data[year] = {}
         self.data[year]["gdf_eday"] = (geometry
                                        .load_geometries(ridings=self.ridings,
+                                                        year=year,
                                                         advance=False))
         gdf_advance = geometry.load_geometries(ridings=self.ridings,
+                                               year=year,
                                                advance=True)
         self.data[year]["gdf_advance"] = gdf_advance
         self.data[year]["gdf_ridings"] = (geometry
@@ -64,9 +68,8 @@ class CanadaVotes:
         return self
 
     def load_votes(self, year):
-        if year not in self.data:
-            self.data[year] = {}
-        self.data["vdf"] = votes.load_vote_data(ridings=self.ridings)
+        self.data[year]["vdf"] = votes.load_vote_data(ridings=self.ridings,
+                                                      year=year)
         return self
 
     def merge_votes(self, year):
@@ -82,7 +85,7 @@ class CanadaVotes:
         )
 
         # advance polls
-        self.data["gdf_advance"] = (
+        self.data[year]["gdf_advance"] = (
             geometry.merge_votes(gdf=self.data[year]["gdf_advance"],
                                  df_vote=self.data[year]["vdf"])
         )
@@ -95,15 +98,17 @@ class CanadaVotes:
 
         return self
 
-    def load(self, year=2021):
+    def load(self):
         """
         load and merge all data for ridings specified
         """
-        if year not in self.data:
-            self.data[year] = {}
-        self.load_geometries(year=year)
-        self.load_votes(year=year)
-        self.merge_votes(year=year)
+        for year in self.years:
+            if year not in self.data:
+                self.data[year] = {}
+            print(f"loading year {year} . . .")
+            self.load_geometries(year=year)
+            self.load_votes(year=year)
+            self.merge_votes(year=year)
         return self
 
     def plot_votes(self, party, year=None, plot_variable="VoteFraction",
@@ -219,6 +224,10 @@ class CanadaVotes:
 
     def __repr__(self):
         return_str = f"CanadaVotes object\n"
+        return_str += f"Years:"
+        for year in self.years:
+            return_str += f" {year}"
+        return_str += "\n"
         return_str += f"Ridings:\n"
         for rid in self.ridings:
             return_str += f"\t{rid}\n"
