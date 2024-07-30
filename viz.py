@@ -177,6 +177,7 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
     return ax
 
 
+# noinspection PyTypeChecker
 def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
                           plot_variable="VoteFraction", figsize=None,
                           ridings_args=None, basemap=None, **kwargs):

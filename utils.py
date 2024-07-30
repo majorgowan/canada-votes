@@ -206,7 +206,19 @@ def generate_provincial_geometries(year=2021):
     year : int
         year for which to generate provincial geometry files
     """
-    if year == 2015:
+    # default is only one layer in zip file (2011 and earlier have multiple)
+    layer = None
+    if year == 2008:
+        eday_file = "pd308.2008.zip"
+        # select "areas" layer rather than "points" layer
+        layer = "pd308_a"
+        adv_file = None
+    elif year == 2011:
+        eday_file = "pd308.2011.zip"
+        # select "areas" layer
+        layer = "pd_a"
+        adv_file = None
+    elif year == 2015:
         eday_file = "polling_divisions_boundaries_2015_shp.zip"
         adv_file = None
     elif year == 2019:
@@ -237,14 +249,15 @@ def generate_provincial_geometries(year=2021):
 
             # load GeoDataFrame
             gdf = gpd.read_file(os.path.join(datadir, gdffile),
-                                encoding="latin1")
+                                layer=layer, encoding="latin1")
 
             # for some reason, in 2019 columns were "FEDNUM" etc. but in 2015
             # and 2021 they are "FED_NUM" etc.
             if "FEDNUM" in gdf.columns:
                 gdf = gdf.rename(columns={"FEDNUM": "FED_NUM",
                                           "PDNUM": "PD_NUM",
-                                          "ADVPOLLNUM": "ADV_POLL_N"})
+                                          "ADVPOLLNUM": "ADV_POLL_N",
+                                          "ADVPDNUM": "ADV_POLL_N"})
             if "ADV_POLL" in gdf.columns:
                 gdf = gdf.rename(columns={"ADV_POLL": "ADV_POLL_N"})
             if "ADVPOLL" in gdf.columns:
@@ -269,7 +282,8 @@ def generate_provincial_geometries(year=2021):
                 gdf_prov = (gdf_prov
                             .sort_values(["FED_NUM", "ADV_POLL_N"])
                             .dissolve(by=["FED_NUM", "ADV_POLL_N"])
-                            .reset_index())
+                            .reset_index()
+                            .get(["FED_NUM", "ADV_POLL_N", "geometry"]))
 
             else:
                 gdf_prov = (gdf[gdf["FED_NUM"]

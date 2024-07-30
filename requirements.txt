@@ -3,3 +3,4 @@ matplotlib
 contextily
 pandas
 geopandas
+requests

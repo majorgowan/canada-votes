@@ -108,7 +108,7 @@ def load_vote_data_prov(year, province):
     return df
 
 
-def load_vote_data(year=2021, ridings=None, area=None):
+def load_vote_data(ridings=None, area=None, year=2021):
     """
 
     Parameters
@@ -117,18 +117,20 @@ def load_vote_data(year=2021, ridings=None, area=None):
         riding names
     area : str
         name of predefined area
+    year : int
+        year for which to load data
 
     Returns
     -------
     pd.DataFrame
     """
     riding_codes = apply_riding_map(ridings=ridings, area=area)
-    pcodes = list(set([int(str(rid)[:2]) for rid in riding_codes]))
+    codes = list(set([int(str(rid)[:2]) for rid in riding_codes]))
 
     df = pd.DataFrame()
 
-    for provcode in pcodes:
-        province = codeprovs[provcode]
+    for province_code in codes:
+        province = codeprovs[province_code]
         temp_df = load_vote_data_prov(year, province)
         # keep only ridings
         temp_df = temp_df[temp_df["DistrictNumber"].isin(riding_codes)]

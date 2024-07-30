@@ -61,7 +61,7 @@ def get_vote_data(province="ON", year=2021, overwrite=False):
     province : str
         two-letter abbreviation for the province
     year : int
-        election year (either 2015 or 2021)
+        election year (one of 2008, 2011, 2015, 2019, 2021)
     overwrite : bool
         if False (default), do not overwrite existing file
 
@@ -70,7 +70,13 @@ def get_vote_data(province="ON", year=2021, overwrite=False):
     str
         name of downloaded file
     """
-    if year == 2015:
+    if year == 2008:
+        base_url = ("https://www.elections.ca/"
+                    + "scripts/OVR2008/31/data/")
+    elif year == 2011:
+        base_url = ("https://www.elections.ca/"
+                    + "scripts/OVR2011/34/data_donnees/")
+    elif year == 2015:
         base_url = ("https://www.elections.ca/"
                     + "res/rep/off/ovr2015app/41/data_donnees/")
     elif year == 2019:
@@ -82,6 +88,7 @@ def get_vote_data(province="ON", year=2021, overwrite=False):
     else:
         print(f"election year {year} not implemented")
         return
+
     filename = f"pollresults_resultatsbureau{provcodes[province]}.zip"
 
     fileurl = urljoin(base_url, filename)
@@ -136,7 +143,23 @@ def get_geometries(advance=False, year=2021, overwrite=False):
     tuple
         local filename(s) of download files
     """
-    if year == 2015:
+    if year == 2008:
+        base_url = ("https://ftp.geogratis.gc.ca/pub/nrcan_rncan/"
+                    + "vector/electoral/2008/")
+        filename = "pd308.2008.zip"
+        # download shape files (no separate pdf documentation)
+        shape_result = download_file(urljoin(base_url, filename),
+                                     overwrite=overwrite)
+        pdf_result = None
+    elif year == 2011:
+        base_url = ("https://ftp.geogratis.gc.ca/pub/nrcan_rncan/"
+                    + "vector/electoral/2011/")
+        filename = "pd308.2011.zip"
+        # download shape files (no separate pdf documentation)
+        shape_result = download_file(urljoin(base_url, filename),
+                                     overwrite=overwrite)
+        pdf_result = None
+    elif year == 2015:
         base_url = ("https://ftp.maps.canada.ca/pub/elections_elections/"
                     + "Electoral-districts_Circonscription-electorale/"
                     + "polling_divisions_boundaries_2015/")
@@ -166,8 +189,8 @@ def get_geometries(advance=False, year=2021, overwrite=False):
                                      overwrite=overwrite)
     elif year == 2021:
         base_url = ("https://ftp.maps.canada.ca/pub/elections_elections/"
-                     + "Electoral-districts_Circonscription-electorale/"
-                     + "Elections_Canada_2021/")
+                    + "Electoral-districts_Circonscription-electorale/"
+                    + "Elections_Canada_2021/")
         pdf_filename = "Elections_Canada_2021_Data_Dictionary.pdf"
         if advance:
             filename = "ADVPD_CA_2021_EN.zip"
