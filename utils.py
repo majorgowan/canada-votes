@@ -81,7 +81,7 @@ def load_json(filepath):
     return json_obj
 
 
-def update_riding_map_file(province):
+def update_riding_map_file(province, year):
     """
     Generate a json file mapping riding names (e.g. "Thornhill")
     to riding numbers (35104)
@@ -90,6 +90,8 @@ def update_riding_map_file(province):
     ----------
     province : str
         two-letter abbreviation
+    year : int
+        election year
 
     Returns
     -------
@@ -97,7 +99,7 @@ def update_riding_map_file(province):
         name of created file
     """
     # if riding_map file exists, load it
-    riding_map_file = os.path.join(datadir, "riding_map.json")
+    riding_map_file = os.path.join(datadir, f"{year}_riding_map.json")
     if os.path.exists(riding_map_file):
         riding_map = load_json(riding_map_file)
     else:
@@ -105,8 +107,8 @@ def update_riding_map_file(province):
 
     provcode = provcodes[province]
 
-    votesfile = os.path.join(datadir,
-                             f"2021_pollresults_resultatsbureau{provcode}.zip")
+    votesfile = os.path.join(
+        datadir, f"{year}_pollresults_resultatsbureau{provcode}.zip")
 
     if not os.path.exists(votesfile):
         print("Please first download votes file with get_vote_data()")
@@ -117,43 +119,57 @@ def update_riding_map_file(province):
             # iterate over CSV files in the zip and extract
             # riding names and numbers from first line
             if re.match(r"pollresults.*csv", fname):
-                temp_df = pd.read_csv(zf.open(fname))
+                temp_df = pd.read_csv(zf.open(fname), encoding="latin1")
                 riding_number, riding_name = temp_df.iloc[0, :2].values
+                # for some crazy reason, in 2008, riding names end in " (?!)
+                riding_name = riding_name.strip("\"")
                 riding_map[riding_name] = int(riding_number)
 
     # write updated riding_map back to disk
     write_json(riding_map, riding_map_file, indent=2, sort_keys=True)
 
 
-def get_riding_map():
+def get_riding_map(year):
     """
     Load riding map from disk
 
+    Parameters
+    ----------
+    year : int
+        election year for which to obtain map
+
     Returns
     -------
     dict
     """
-    return load_json(os.path.join(datadir, "riding_map.json"))
+    return load_json(os.path.join(datadir, f"{year}_riding_map.json"))
 
 
-def get_inv_riding_map():
+def get_inv_riding_map(year):
     """
     Load inverse riding map
 
+    Parameters
+    ----------
+    year : int
+        election year
+
     Returns
     -------
     dict
     """
-    riding_map = get_riding_map()
+    riding_map = get_riding_map(year)
     return {v: k for k, v in riding_map.items()}
 
 
-def provs_from_ridings(ridings):
+def provs_from_ridings(year, ridings):
     """
     get list of province numeric codes from list of riding names
 
     Parameters
     ----------
+    year : int
+        election year
     ridings : list
         riding names
 
@@ -162,7 +178,7 @@ def provs_from_ridings(ridings):
     list
         province codes
     """
-    riding_map = get_riding_map()
+    riding_map = get_riding_map(year)
     provcode_list = []
     riding_codes = []
     for rid in ridings:
@@ -173,12 +189,14 @@ def provs_from_ridings(ridings):
     return provcode_list
 
 
-def apply_riding_map(ridings=None, area=None):
+def apply_riding_map(year, ridings=None, area=None):
     """
     convert list of riding names or area to list of riding numbers
 
     Parameters
     ----------
+    year : int
+        election year
     ridings : list
         riding names
     area : str
@@ -188,7 +206,7 @@ def apply_riding_map(ridings=None, area=None):
     -------
     list
     """
-    riding_map = get_riding_map()
+    riding_map = get_riding_map(year)
     if ridings is None:
         if area is None:
             return []
@@ -212,21 +230,16 @@ def generate_provincial_geometries(year=2021):
         eday_file = "pd308.2008.zip"
         # select "areas" layer rather than "points" layer
         layer = "pd308_a"
-        adv_file = None
     elif year == 2011:
         eday_file = "pd308.2011.zip"
         # select "areas" layer
         layer = "pd_a"
-        adv_file = None
     elif year == 2015:
         eday_file = "polling_divisions_boundaries_2015_shp.zip"
-        adv_file = None
     elif year == 2019:
         eday_file = "polling_divisions_boundaries_2019.shp.zip"
-        adv_file = "advanced_polling_districts_boundaries_2019.shp.zip"
     elif year == 2021:
         eday_file = "PD_CA_2021_EN.zip"
-        adv_file = "ADVPD_CA_2021_EN.zip"
     else:
         print(f"year {year} not implemented")
         return None
@@ -234,80 +247,74 @@ def generate_provincial_geometries(year=2021):
     if not os.path.exists(os.path.join(datadir, eday_file)):
         print(f"please download shape file {eday_file} with get_geometries()")
         return
-    if adv_file is not None:
-        if not os.path.exists(os.path.join(datadir, adv_file)):
-            print(f"please download shape file {adv_file} "
-                  + "with get_geometries()")
-            return
 
-    for gdffile, suffix in [(eday_file, "geometries"),
-                            (adv_file, "geometries_adv")]:
-        gdf = None
-        if gdffile is not None:
-            # some years might not have both eday and advance files
-            # so that gdffile is None
+    # load GeoDataFrame
+    gdf = gpd.read_file(os.path.join(datadir, eday_file),
+                        layer=layer, encoding="latin1")
 
-            # load GeoDataFrame
-            gdf = gpd.read_file(os.path.join(datadir, gdffile),
-                                layer=layer, encoding="latin1")
+    # for some reason, in 2019 columns were "FEDNUM" etc. but in 2015
+    # and 2021 they are "FED_NUM" etc.
+    if "FEDNUM" in gdf.columns:
+        gdf = gdf.rename(columns={"FEDNUM": "FED_NUM",
+                                  "PDNUM": "PD_NUM",
+                                  "ADVPOLLNUM": "ADV_POLL_N",
+                                  "ADVPDNUM": "ADV_POLL_N"})
+    if "ADV_POLL" in gdf.columns:
+        gdf = gdf.rename(columns={"ADV_POLL": "ADV_POLL_N"})
+    if "ADVPOLL" in gdf.columns:
+        gdf = gdf.rename(columns={"ADVPOLL": "ADV_POLL_N"})
 
-            # for some reason, in 2019 columns were "FEDNUM" etc. but in 2015
-            # and 2021 they are "FED_NUM" etc.
-            if "FEDNUM" in gdf.columns:
-                gdf = gdf.rename(columns={"FEDNUM": "FED_NUM",
-                                          "PDNUM": "PD_NUM",
-                                          "ADVPOLLNUM": "ADV_POLL_N",
-                                          "ADVPDNUM": "ADV_POLL_N"})
-            if "ADV_POLL" in gdf.columns:
-                gdf = gdf.rename(columns={"ADV_POLL": "ADV_POLL_N"})
-            if "ADVPOLL" in gdf.columns:
-                gdf = gdf.rename(columns={"ADVPOLL": "ADV_POLL_N"})
+    for prov, provcode in provcodes.items():
+        # iterate over provinces, generate subset dataframe
+        # and write it to zip file
+        eday_filename = f"{year}_{prov}_{provcode}_geometries"
+        adv_filename = f"{year}_{prov}_{provcode}_geometries_adv"
+        if os.path.exists(os.path.join(datadir,
+                                       f"{eday_filename}.zip")):
+            print(f"file {eday_filename} already exists, skipping... ")
+            continue
 
-        for prov, provcode in provcodes.items():
-            # iterate over provinces, generate subset dataframe
-            # and write it to zip file
-            prov_filename = f"{year}_{prov}_{provcode}_{suffix}"
-            if os.path.exists(os.path.join(datadir,
-                                           f"{prov_filename}.zip")):
-                print(f"file {prov_filename} already exists, skipping... ")
-                continue
+        # restrict national file to this province and convert to lon/lat
+        gdf_prov = (gdf[gdf["FED_NUM"]
+                    .astype(str).str.startswith(f"{provcode}")])
 
-            if gdf is None:
-                # if gdf is None, it means there is no national advance poll
-                # geometry file, so "dissolve" it from election-day
-                # geometries
-                eday_filename = f"{year}_{prov}_{provcode}_geometries.zip"
-                gdf_prov = gpd.read_file(os.path.join(datadir, eday_filename),
-                                         encoding="latin1")
-                gdf_prov = (gdf_prov
-                            .sort_values(["FED_NUM", "ADV_POLL_N"])
-                            .dissolve(by=["FED_NUM", "ADV_POLL_N"])
-                            .reset_index()
-                            .get(["FED_NUM", "ADV_POLL_N", "geometry"]))
+        # for recent elections, separate Advance Poll geometries file
+        # published, but we can "dissolve" it from the election-day
+        # file anyway:
+        gdf_prov_adv = (gdf_prov
+                        .sort_values(["FED_NUM", "ADV_POLL_N"])
+                        .dissolve(by=["FED_NUM", "ADV_POLL_N"])
+                        .reset_index()
+                        .get(["FED_NUM", "ADV_POLL_N", "geometry"]))
 
-            else:
-                gdf_prov = (gdf[gdf["FED_NUM"]
-                            .astype(str).str.startswith(f"{provcode}")]
-                            .to_crs(epsg=4326))
-
+        # write both election-day and advance-poll shape files to disk:
+        for gdf_p, filename in [(gdf_prov, eday_filename),
+                                (gdf_prov_adv, adv_filename)]:
             # make folder for shape files
-            os.mkdir(os.path.join(datadir, prov_filename))
-            gdf_prov.to_file(os.path.join(datadir,
-                                          prov_filename,
-                                          f"{prov_filename}.shp"))
+            os.mkdir(os.path.join(datadir, filename))
+            # convert to longitude / latitude coordinates
+            # and write to disk
+            (gdf_p
+             .to_crs(epsg=4326)
+             .to_file(os.path.join(datadir, filename, f"{filename}.shp")))
 
             # add folder to zip file and delete
-            with ZipFile(os.path.join(datadir, f"{prov_filename}.zip"),
+            with ZipFile(os.path.join(datadir, f"{filename}.zip"),
                          "w") as zf:
-                for f in os.listdir(os.path.join(datadir, prov_filename)):
-                    zf.write(os.path.join(datadir, prov_filename, f),
+                for f in os.listdir(os.path.join(datadir, filename)):
+                    zf.write(os.path.join(datadir, filename, f),
                              arcname=f)
-            shutil.rmtree(os.path.join(datadir, prov_filename))
+            shutil.rmtree(os.path.join(datadir, filename))
 
 
-def compute_riding_centroids():
+def compute_riding_centroids(year):
     """
     Generate CSV file with riding numbers, names and centroids (in lon/lat)
+
+    Parameters
+    ----------
+    year : int
+        election year
     """
     adv_file = "ADVPD_CA_2021_EN.zip"
     if not os.path.exists(os.path.join(datadir, adv_file)):
@@ -329,7 +336,7 @@ def compute_riding_centroids():
     gdf["centroid_lon"] = gdf["centroid"].x
     gdf["centroid_lat"] = gdf["centroid"].y
 
-    inv_riding_map = get_inv_riding_map()
+    inv_riding_map = get_inv_riding_map(year)
     gdf["DistrictName"] = gdf.index.map(inv_riding_map)
 
     # write to CSV file
@@ -362,7 +369,7 @@ def haversine(p1, p2):
     return 1.0 - cos(dlat) + cos(p1[1]) * cos(p2[1]) * (1.0 - cos(dlon))
 
 
-def get_nearest_ridings(riding, n=10):
+def get_nearest_ridings(riding, n=10, year=2021):
     """
     Get list of nearest ridings to given riding (by centroid distance)
 
@@ -372,6 +379,8 @@ def get_nearest_ridings(riding, n=10):
         name of riding
     n : int
         number of ridings to return
+    year : int
+        election year
 
     Returns
     -------
@@ -379,9 +388,10 @@ def get_nearest_ridings(riding, n=10):
         names of nearest ridings
     """
     if not os.path.exists(os.path.join(datadir, "riding_centroids.csv")):
-        compute_riding_centroids()
+        compute_riding_centroids(year)
 
-    df_centroids = pd.read_csv(os.path.join(datadir, "riding_centroids.csv"))
+    df_centroids = pd.read_csv(os.path.join(datadir, "riding_centroids.csv"),
+                               encoding="latin1")
 
     p1 = (df_centroids
           .loc[df_centroids["DistrictName"] == riding]
@@ -398,7 +408,7 @@ def get_nearest_ridings(riding, n=10):
     return df_centroids.loc[dists.index[:n], "DistrictName"].tolist()
 
 
-def validate_ridings(ridings):
+def validate_ridings(ridings, year=2021):
     """
     check that list of riding names exist
 
@@ -406,34 +416,35 @@ def validate_ridings(ridings):
     ----------
     ridings : list
         names of ridings
+    year : int
+        election year
 
     Returns
     -------
     list
-        invalid riding names
+        valid ridings
     """
-    ridings_map = get_riding_map()
+    ridings_map = get_riding_map(year)
 
-    invalid_ridings = [rid for rid in ridings
-                       if rid not in ridings_map]
-
-    return invalid_ridings
+    return [rid for rid in ridings if rid in ridings_map]
 
 
-def query_ridings(pattern):
+def query_ridings(pattern, year=2021):
     """
 
     Parameters
     ----------
     pattern : str
         regex pattern to query list of riding names
+    year : int
+        election year
 
     Returns
     -------
     list
         matching riding names
     """
-    ridings_map = get_riding_map()
+    ridings_map = get_riding_map(year)
 
     pattern = r"" + pattern
     matches = [rid for rid in ridings_map

@@ -40,10 +40,10 @@ def load_geometries(ridings=None, area=None, year=2021, advance=False):
         else:
             print("please specify list of ridings or name of area")
             return
-    riding_codes = apply_riding_map(ridings)
+    riding_codes = apply_riding_map(year=year, ridings=ridings)
 
     # get list of province codes from riding numbers
-    provcode_list = provs_from_ridings(ridings)
+    provcode_list = provs_from_ridings(year=year, ridings=ridings)
 
     gdf = gpd.GeoDataFrame()
 

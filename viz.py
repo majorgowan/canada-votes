@@ -55,7 +55,7 @@ def poll_station_plot(gdf, title=None, **kwargs):
     return axobj
 
 
-def ridings_plot(gdf_ridings, labels=False, title=None, **kwargs):
+def ridings_plot(gdf_ridings, year=2021, labels=False, title=None, **kwargs):
     """
     plot ridings outlines
 
@@ -64,6 +64,8 @@ def ridings_plot(gdf_ridings, labels=False, title=None, **kwargs):
     gdf_ridings : gpd.GeoDataFrame
         with geometries at riding level, including centroids if labels is True;
         index of dataframe should be riding numbers
+    year : int
+        election year for labels (since riding numbers change sometimes)
     labels : bool
         if True, add riding names at centroids
     title : str
@@ -76,7 +78,7 @@ def ridings_plot(gdf_ridings, labels=False, title=None, **kwargs):
     matplotlib.Axes
     """
     axobj = gdf_ridings.plot(**kwargs)
-    inv_riding_map = get_inv_riding_map()
+    inv_riding_map = get_inv_riding_map(year)
 
     if labels:
         # add labels at centroids
@@ -91,7 +93,8 @@ def ridings_plot(gdf_ridings, labels=False, title=None, **kwargs):
 
 
 def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
-               figsize=None, ridings_args=None, basemap=None, **kwargs):
+               figsize=None, ridings_args=None, basemap=None, year=2021,
+               **kwargs):
     """
     visualize votes for single party by polling station
 
@@ -112,6 +115,8 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
         parameters for ridings_plot
     basemap : str
         one of "Positron", "Voyager", "Mapnik"
+    year : int
+        election year (for title, riding map)
     kwargs
         keyword arguments to GeoDataFrame.plot()
 
@@ -157,7 +162,7 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
                          "linewidth": 1,
                          "edgecolor": "gray"}
         ridings_args0.update(ridings_args)
-        ridings_plot(gdf_ridings, ax=ax, **ridings_args0)
+        ridings_plot(gdf_ridings, year=year, ax=ax, **ridings_args0)
 
     if basemap is not None:
         # add basemap from web provider
@@ -180,7 +185,8 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
 # noinspection PyTypeChecker
 def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
                           plot_variable="VoteFraction", figsize=None,
-                          ridings_args=None, basemap=None, **kwargs):
+                          ridings_args=None, basemap=None, year=2021,
+                          **kwargs):
     """
     visualize votes for single party by polling station
 
@@ -203,6 +209,8 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
         parameters for ridings_plot
     basemap : str
         one of "Positron", "Voyager", "Mapnik"
+    year : int
+        election year
     kwargs
         keyword arguments to GeoDataFrame.plot()
 
@@ -258,7 +266,7 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
                          "linewidth": 1,
                          "edgecolor": "gray"}
         ridings_args0.update(ridings_args)
-        ridings_plot(gdf_ridings, ax=ax, **ridings_args0)
+        ridings_plot(gdf_ridings, year=year, ax=ax, **ridings_args0)
 
     # add party names to colorbar ends
     cbar = plt.gcf().axes[-1]

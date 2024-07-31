@@ -96,7 +96,7 @@ def get_vote_data(province="ON", year=2021, overwrite=False):
     result = download_file(fileurl, prefix=f"{year}_", overwrite=overwrite)
 
     # generate riding name -> number map
-    update_riding_map_file(province)
+    update_riding_map_file(province=province, year=year)
 
     return result
 
@@ -124,15 +124,12 @@ def get_all_vote_data(year=2021, overwrite=False):
     return ",".join(result_list)
 
 
-def get_geometries(advance=False, year=2021, overwrite=False):
+def get_geometries(year=2021, overwrite=False):
     """
     Download GIS shapefiles for electoral districts
 
     Parameters
     ----------
-    advance : bool
-        if True, download shape files for advance poll zone boundaries;
-        otherwise download shape files for election-day poll zones
     year : int
         election year for which to download data
     overwrite : bool
@@ -177,10 +174,7 @@ def get_geometries(advance=False, year=2021, overwrite=False):
                     + "Electoral-districts_Circonscription-electorale/"
                     + "Elections_Canada_2019/")
         pdf_filename = "Elections_Canada_2019_Data_Dictionary.pdf"
-        if advance:
-            filename = "advanced_polling_districts_boundaries_2019.shp.zip"
-        else:
-            filename = "polling_divisions_boundaries_2019.shp.zip"
+        filename = "polling_divisions_boundaries_2019.shp.zip"
         # download data dictionary file
         pdf_result = download_file(urljoin(base_url, pdf_filename),
                                    overwrite=overwrite)
@@ -192,10 +186,7 @@ def get_geometries(advance=False, year=2021, overwrite=False):
                     + "Electoral-districts_Circonscription-electorale/"
                     + "Elections_Canada_2021/")
         pdf_filename = "Elections_Canada_2021_Data_Dictionary.pdf"
-        if advance:
-            filename = "ADVPD_CA_2021_EN.zip"
-        else:
-            filename = "PD_CA_2021_EN.zip"
+        filename = "PD_CA_2021_EN.zip"
         # download data dictionary file
         pdf_result = download_file(urljoin(base_url, pdf_filename),
                                    overwrite=overwrite)

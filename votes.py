@@ -16,7 +16,7 @@ from .utils import get_int_part, apply_riding_map
 
 # TODO: allow handling parties with no votes in a poll to not break everything
 
-def load_vote_data_prov(year, province):
+def load_vote_data_prov(year, province, ridings=None):
     """
     Load dataframe with vote results from single province
 
@@ -26,6 +26,8 @@ def load_vote_data_prov(year, province):
         election year from which to load votes
     province : str
         two character province abbreviation
+    ridings : list
+        ridings to load
 
     Returns
     -------
@@ -37,6 +39,11 @@ def load_vote_data_prov(year, province):
                              + ".zip")
 
     df = pd.DataFrame()
+
+    if ridings is not None:
+        riding_nos = [str(rid) for rid in apply_riding_map(year, ridings)]
+    else:
+        riding_nos = []
 
     french_columns = [
         "Electoral District Name_French/Nom de circonscription_Français",
@@ -76,19 +83,31 @@ def load_vote_data_prov(year, province):
             "NoPollIndicator"
     }
 
+    # text encoding changes in 2015 (oh boy)
+    csv_encoding = "utf-8" if year >= 2015 else "latin-1"
+    # regex pattern for riding file
+    pat = re.compile(r".*pollresults.*([0-9]{5}).*")
+
     with ZipFile(votesfile, "r") as zf:
         for fname in zf.namelist():
             # iterate over CSV files in the zip and extract
             # riding names and numbers from first line
-            if re.match(r"pollresults.*csv", fname):
-                temp_df = pd.read_csv(zf.open(fname), dtype=dtype_map)
-                df = pd.concat((df, temp_df), ignore_index=True)
+            match = pat.match(fname)
+            if match is not None:
+                # if ridings is None, get all ridings, else matchers
+                if ridings is None or match.group(1) in riding_nos:
+                    temp_df = pd.read_csv(zf.open(fname), encoding=csv_encoding,
+                                          dtype=dtype_map)
+                    df = pd.concat((df, temp_df), ignore_index=True)
 
     # drop redundant French columns
     df = df.drop(french_columns, axis=1)
 
     # apply some sanity-preserving column renaming
     df = df.rename(columns=column_renaming_map)
+
+    # for some reason, DistrictName ends with " in 2008
+    df["DistrictName"] = df["DistrictName"].str.strip("\"")
 
     # drop rows not associated with a polling station ("Special Voting Rules")
     df = df[~df["Poll"].str.contains("S/R")]
@@ -124,16 +143,15 @@ def load_vote_data(ridings=None, area=None, year=2021):
     -------
     pd.DataFrame
     """
-    riding_codes = apply_riding_map(ridings=ridings, area=area)
+    riding_codes = apply_riding_map(ridings=ridings, area=area, year=year)
     codes = list(set([int(str(rid)[:2]) for rid in riding_codes]))
 
     df = pd.DataFrame()
 
     for province_code in codes:
         province = codeprovs[province_code]
-        temp_df = load_vote_data_prov(year, province)
-        # keep only ridings
-        temp_df = temp_df[temp_df["DistrictNumber"].isin(riding_codes)]
+        temp_df = load_vote_data_prov(year=year, province=province,
+                                      ridings=ridings)
         df = pd.concat((df, temp_df), ignore_index=True)
 
     return df

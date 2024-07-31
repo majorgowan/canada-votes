@@ -26,7 +26,7 @@ class CanadaVotes:
             if year not in [2008, 2011, 2015, 2019, 2021]:
                 print("year {year} invalid")
                 print("year must be one of: 2008, 2011, 2015, 2019, 2021")
-                return None
+                return
 
         if self.ridings is None:
             if self.area is not None:
@@ -44,22 +44,18 @@ class CanadaVotes:
         if ridings is not None:
             new_ridings += ridings
 
-        invalid_ridings = validate_ridings(new_ridings)
-        if len(list(invalid_ridings)) > 0:
-            print("the following riding names are invalid:")
-            for rid in invalid_ridings:
-                print(f"\t{rid}")
-
         self.ridings += [rid for rid in new_ridings
-                         if rid not in invalid_ridings]
+                         if rid not in self.ridings]
+
         return self
 
     def load_geometries(self, year):
+        ridings = validate_ridings(ridings=self.ridings, year=year)
         self.data[year]["gdf_eday"] = (geometry
-                                       .load_geometries(ridings=self.ridings,
+                                       .load_geometries(ridings=ridings,
                                                         year=year,
                                                         advance=False))
-        gdf_advance = geometry.load_geometries(ridings=self.ridings,
+        gdf_advance = geometry.load_geometries(ridings=ridings,
                                                year=year,
                                                advance=True)
         self.data[year]["gdf_advance"] = gdf_advance
@@ -68,7 +64,8 @@ class CanadaVotes:
         return self
 
     def load_votes(self, year):
-        self.data[year]["vdf"] = votes.load_vote_data(ridings=self.ridings,
+        ridings = validate_ridings(ridings=self.ridings, year=year)
+        self.data[year]["vdf"] = votes.load_vote_data(ridings=ridings,
                                                       year=year)
         return self
 
@@ -109,6 +106,7 @@ class CanadaVotes:
             self.load_geometries(year=year)
             self.load_votes(year=year)
             self.merge_votes(year=year)
+            print("                        Loaded.")
         return self
 
     def plot_votes(self, party, year=None, plot_variable="VoteFraction",
@@ -119,7 +117,7 @@ class CanadaVotes:
             return None
 
         if year is None:
-            year = self.data.keys()[0]
+            year = list(self.data.keys())[0]
 
         gdf_ridings = self.data[year]["gdf_ridings"]
         if advance:
@@ -129,7 +127,8 @@ class CanadaVotes:
 
         viz.votes_plot(gdf_plot, party=party, gdf_ridings=gdf_ridings,
                        plot_variable=plot_variable, figsize=figsize,
-                       ridings_args=ridings_args, basemap=basemap, **kwargs)
+                       ridings_args=ridings_args, basemap=basemap,
+                       year=year, **kwargs)
         if filename is not None:
             viz.savepng(filename)
 
@@ -142,7 +141,7 @@ class CanadaVotes:
             return None
 
         if year is None:
-            year = self.data.keys()[0]
+            year = list(self.data.keys())[0]
 
         gdf_ridings = self.data[year]["gdf_ridings"]
         if advance:
@@ -154,7 +153,7 @@ class CanadaVotes:
                                   gdf_ridings=gdf_ridings,
                                   plot_variable=plot_variable,
                                   figsize=figsize, ridings_args=ridings_args,
-                                  basemap=basemap, **kwargs)
+                                  basemap=basemap, year=year, **kwargs)
         if filename is not None:
             viz.savepng(filename)
 
@@ -186,9 +185,9 @@ class CanadaVotes:
         pd.DataFrame
             vote totals
         """
-        if hasattr(self, "vdf"):
+        if "vdf" in self.data[year]:
             if by.lower() == "party":
-                df = (self.vdf
+                df = (self.data[year]["vdf"]
                       .groupby("Party")
                       .aggregate({"Votes": "sum", "TotalVotes": "sum"}))
                 df["VoteFraction"] = df["Votes"].divide(df["TotalVotes"])
@@ -198,10 +197,10 @@ class CanadaVotes:
                     return df.sort_values("Votes", ascending=False)
 
             elif by.lower() == "candidate":
-                df = self.vdf.get(["Candidate", "Party", "DistrictName",
-                                   "CandidateLastName", "CandidateFirstName",
-                                   "ElectedIndicator",
-                                   "Votes", "TotalVotes"])
+                df = (self.data[year]["vdf"]
+                      .get(["Candidate", "Party", "DistrictName",
+                            "CandidateLastName", "CandidateFirstName",
+                            "ElectedIndicator", "Votes", "TotalVotes"]))
                 df["Estring"] = (df["ElectedIndicator"]
                                  .map(lambda val: ("  (Elected)"
                                                    if val == "Y" else "")))
