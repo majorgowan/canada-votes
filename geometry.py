@@ -11,7 +11,8 @@ import pandas as pd
 import geopandas as gpd
 from .votes import compute_vote_fraction
 from .constants import codeprovs, datadir, areas
-from .utils import provs_from_ridings, apply_riding_map, get_int_part
+from .utils import (provs_from_ridings, validate_ridings, apply_riding_map,
+                    get_int_part)
 
 
 def load_geometries(ridings=None, area=None, year=2021, advance=False):
@@ -40,6 +41,10 @@ def load_geometries(ridings=None, area=None, year=2021, advance=False):
         else:
             print("please specify list of ridings or name of area")
             return
+
+    # select only valid ridings
+    ridings = validate_ridings(ridings, year)
+
     riding_codes = apply_riding_map(year=year, ridings=ridings)
 
     # get list of province codes from riding numbers

@@ -11,7 +11,8 @@ import re
 import pandas as pd
 from zipfile import ZipFile
 from .constants import datadir, provcodes, codeprovs
-from .utils import get_int_part, apply_riding_map
+from .utils import (get_int_part, area_to_ridings, apply_riding_map,
+                    validate_ridings)
 
 
 # TODO: allow handling parties with no votes in a poll to not break everything
@@ -41,6 +42,7 @@ def load_vote_data_prov(year, province, ridings=None):
     df = pd.DataFrame()
 
     if ridings is not None:
+        ridings = validate_ridings(ridings, year)
         riding_nos = [str(rid) for rid in apply_riding_map(year, ridings)]
     else:
         riding_nos = []
@@ -143,7 +145,12 @@ def load_vote_data(ridings=None, area=None, year=2021):
     -------
     pd.DataFrame
     """
-    riding_codes = apply_riding_map(ridings=ridings, area=area, year=year)
+    if area is not None:
+        ridings = area_to_ridings(area, year)
+    elif ridings is not None:
+        ridings = validate_ridings(ridings, year)
+
+    riding_codes = apply_riding_map(ridings=ridings, year=year)
     codes = list(set([int(str(rid)[:2]) for rid in riding_codes]))
 
     df = pd.DataFrame()

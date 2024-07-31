@@ -12,6 +12,19 @@ basedir = os.path.dirname(__file__)
 datadir = os.path.join(basedir, "data")
 outputdir = os.path.join(basedir, "output")
 
+geometry_files = {
+    2008: {"filename": "pd308.2008.zip",
+           "layer": "pd308_a"},
+    2011: {"filename": "pd308.2011.zip",
+           "layer": "pd_a"},
+    2015: {"filename": "polling_divisions_boundaries_2015_shp.zip",
+           "layer": None},
+    2019: {"filename": "polling_divisions_boundaries_2019_shp.zip",
+           "layer": None},
+    2021: {"filename": "PD_CA_2021_EN.zip",
+           "layer": None}
+}
+
 provcodes = {
     "AB": 48,
     "BC": 59,
@@ -120,22 +133,31 @@ areas = {
                "Pontiac",
                "Argenteuil--La Petite-Nation"],
     "calgary": ["Calgary Centre",
+                "Calgary Centre-North",
                 "Calgary Confederation",
+                "Calgary East",
                 "Calgary Forest Lawn",
                 "Calgary Heritage",
                 "Calgary Midnapore",
+                "Calgary Northeast",
                 "Calgary Nose Hill",
+                "Calgary--Nose Hill",
                 "Calgary Rocky Ridge",
                 "Calgary Shepard",
                 "Calgary Signal Hill",
-                "Calgary Skyview"],
+                "Calgary Skyview",
+                "Calgary Southeast",
+                "Calgary Southwest",
+                "Calgary West"],
     "winnipeg": ["Winnipeg Centre",
                  "Winnipeg North",
                  "Winnipeg South",
                  "Winnipeg South Centre",
                  "Kildonan--St. Paul",
                  "Elmwood--Transcona",
+                 "Charleswood--St. James--Assiniboia",
                  "Charleswood--St. James--Assiniboia--Headingley",
+                 "Saint Boniface",
                  "Saint Boniface--Saint Vital"],
     "montreal": ["Papineau",
                  "Rosemont--La Petite-Patrie",

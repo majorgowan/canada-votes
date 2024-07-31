@@ -14,7 +14,7 @@ import pandas as pd
 import geopandas as gpd
 from math import cos, pi
 from zipfile import ZipFile
-from .constants import datadir, provcodes, areas
+from .constants import datadir, provcodes, areas, geometry_files
 
 
 def get_int_part(s):
@@ -189,7 +189,28 @@ def provs_from_ridings(year, ridings):
     return provcode_list
 
 
-def apply_riding_map(year, ridings=None, area=None):
+def area_to_ridings(area, year):
+    """
+    Convert area to list of ridings in a given year
+
+    Parameters
+    ----------
+    area : str
+        name of predefined area
+    year : int
+        election year
+
+    Returns
+    -------
+    list
+        ridings names
+    """
+    all_ridings = areas[area]
+    ridings = apply_riding_map(year, all_ridings)
+    return ridings
+
+
+def apply_riding_map(year, ridings=None):
     """
     convert list of riding names or area to list of riding numbers
 
@@ -199,19 +220,12 @@ def apply_riding_map(year, ridings=None, area=None):
         election year
     ridings : list
         riding names
-    area : str
-        name of predefined area
 
     Returns
     -------
     list
     """
     riding_map = get_riding_map(year)
-    if ridings is None:
-        if area is None:
-            return []
-        ridings = areas[area]
-
     return [riding_map[rid] for rid in ridings]
 
 
@@ -224,25 +238,13 @@ def generate_provincial_geometries(year=2021):
     year : int
         year for which to generate provincial geometry files
     """
-    # default is only one layer in zip file (2011 and earlier have multiple)
-    layer = None
-    if year == 2008:
-        eday_file = "pd308.2008.zip"
-        # select "areas" layer rather than "points" layer
-        layer = "pd308_a"
-    elif year == 2011:
-        eday_file = "pd308.2011.zip"
-        # select "areas" layer
-        layer = "pd_a"
-    elif year == 2015:
-        eday_file = "polling_divisions_boundaries_2015_shp.zip"
-    elif year == 2019:
-        eday_file = "polling_divisions_boundaries_2019.shp.zip"
-    elif year == 2021:
-        eday_file = "PD_CA_2021_EN.zip"
-    else:
+    filedata = geometry_files.get(year, None)
+    if filedata is None:
         print(f"year {year} not implemented")
         return None
+
+    eday_file = filedata["filename"]
+    layer = filedata["layer"]
 
     if not os.path.exists(os.path.join(datadir, eday_file)):
         print(f"please download shape file {eday_file} with get_geometries()")
@@ -316,13 +318,17 @@ def compute_riding_centroids(year):
     year : int
         election year
     """
-    adv_file = "ADVPD_CA_2021_EN.zip"
-    if not os.path.exists(os.path.join(datadir, adv_file)):
-        print(f"please download shape file {adv_file} with get_geometries()")
+    filedata = geometry_files[year]
+    filename = filedata["filename"]
+    layer = filedata["layer"]
+
+    if not os.path.exists(os.path.join(datadir, filename)):
+        print(f"please download shape file {filename} with get_geometries()")
         return
 
     # load GeoDataFrame
-    gdf = gpd.read_file(os.path.join(datadir, adv_file))
+    gdf = gpd.read_file(os.path.join(datadir, filename),
+                        layer=layer, encoding="latin1")
     # dissolve ridings
     gdf = gdf.dissolve(by="FED_NUM")
 
@@ -343,7 +349,8 @@ def compute_riding_centroids(year):
     (gdf
      .reset_index()
      .get(["FED_NUM", "DistrictName", "centroid_lon", "centroid_lat"])
-     .to_csv(os.path.join(datadir, "riding_centroids.csv"), index=None))
+     .to_csv(os.path.join(datadir, f"{year}_riding_centroids.csv"),
+             index=None))
 
 
 def haversine(p1, p2):
@@ -387,10 +394,12 @@ def get_nearest_ridings(riding, n=10, year=2021):
     list
         names of nearest ridings
     """
-    if not os.path.exists(os.path.join(datadir, "riding_centroids.csv")):
+    if not os.path.exists(os.path.join(datadir,
+                                       f"{year}_riding_centroids.csv")):
         compute_riding_centroids(year)
 
-    df_centroids = pd.read_csv(os.path.join(datadir, "riding_centroids.csv"),
+    df_centroids = pd.read_csv(os.path.join(datadir,
+                                            f"{year}_riding_centroids.csv"),
                                encoding="latin1")
 
     p1 = (df_centroids
