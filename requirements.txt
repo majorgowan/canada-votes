@@ -1,6 +1,7 @@
 jupyterlab
 matplotlib
 contextily
-pandas
 geopandas
 requests
+shapely
+pandas

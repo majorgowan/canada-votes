@@ -9,12 +9,9 @@ Email:   mark.fruman@yahoo.com
 import re
 import os
 import json
-import shutil
 import pandas as pd
-import geopandas as gpd
-from math import cos, pi
 from zipfile import ZipFile
-from .constants import datadir, provcodes, areas, geometry_files
+from .constants import datadir, provcodes, areas
 
 
 def get_int_part(s):
@@ -191,13 +188,13 @@ def provs_from_ridings(year, ridings):
 
 def area_to_ridings(area, year):
     """
-    Convert area to list of ridings in a given year
+    Convert area to list of riding numbers in a given year
 
     Parameters
     ----------
     area : str
         name of predefined area
-    year : int
+    year : int or list
         election year
 
     Returns
@@ -227,194 +224,6 @@ def apply_riding_map(year, ridings=None):
     """
     riding_map = get_riding_map(year)
     return [riding_map[rid] for rid in ridings]
-
-
-def generate_provincial_geometries(year=2021):
-    """
-    Split the country-wide file into province files (to save memory).
-
-    Parameters
-    ----------
-    year : int
-        year for which to generate provincial geometry files
-    """
-    filedata = geometry_files.get(year, None)
-    if filedata is None:
-        print(f"year {year} not implemented")
-        return None
-
-    eday_file = filedata["filename"]
-    layer = filedata["layer"]
-
-    if not os.path.exists(os.path.join(datadir, eday_file)):
-        print(f"please download shape file {eday_file} with get_geometries()")
-        return
-
-    # load GeoDataFrame
-    gdf = gpd.read_file(os.path.join(datadir, eday_file),
-                        layer=layer, encoding="latin1")
-
-    # for some reason, in 2019 columns were "FEDNUM" etc. but in 2015
-    # and 2021 they are "FED_NUM" etc.
-    if "FEDNUM" in gdf.columns:
-        gdf = gdf.rename(columns={"FEDNUM": "FED_NUM",
-                                  "PDNUM": "PD_NUM",
-                                  "ADVPOLLNUM": "ADV_POLL_N",
-                                  "ADVPDNUM": "ADV_POLL_N"})
-    if "ADV_POLL" in gdf.columns:
-        gdf = gdf.rename(columns={"ADV_POLL": "ADV_POLL_N"})
-    if "ADVPOLL" in gdf.columns:
-        gdf = gdf.rename(columns={"ADVPOLL": "ADV_POLL_N"})
-
-    for prov, provcode in provcodes.items():
-        # iterate over provinces, generate subset dataframe
-        # and write it to zip file
-        eday_filename = f"{year}_{prov}_{provcode}_geometries"
-        adv_filename = f"{year}_{prov}_{provcode}_geometries_adv"
-        if os.path.exists(os.path.join(datadir,
-                                       f"{eday_filename}.zip")):
-            print(f"file {eday_filename} already exists, skipping... ")
-            continue
-
-        # restrict national file to this province and convert to lon/lat
-        gdf_prov = (gdf[gdf["FED_NUM"]
-                    .astype(str).str.startswith(f"{provcode}")])
-
-        # for recent elections, separate Advance Poll geometries file
-        # published, but we can "dissolve" it from the election-day
-        # file anyway:
-        gdf_prov_adv = (gdf_prov
-                        .sort_values(["FED_NUM", "ADV_POLL_N"])
-                        .dissolve(by=["FED_NUM", "ADV_POLL_N"])
-                        .reset_index()
-                        .get(["FED_NUM", "ADV_POLL_N", "geometry"]))
-
-        # write both election-day and advance-poll shape files to disk:
-        for gdf_p, filename in [(gdf_prov, eday_filename),
-                                (gdf_prov_adv, adv_filename)]:
-            # make folder for shape files
-            os.mkdir(os.path.join(datadir, filename))
-            # convert to longitude / latitude coordinates
-            # and write to disk
-            (gdf_p
-             .to_crs(epsg=4326)
-             .to_file(os.path.join(datadir, filename, f"{filename}.shp")))
-
-            # add folder to zip file and delete
-            with ZipFile(os.path.join(datadir, f"{filename}.zip"),
-                         "w") as zf:
-                for f in os.listdir(os.path.join(datadir, filename)):
-                    zf.write(os.path.join(datadir, filename, f),
-                             arcname=f)
-            shutil.rmtree(os.path.join(datadir, filename))
-
-
-def compute_riding_centroids(year):
-    """
-    Generate CSV file with riding numbers, names and centroids (in lon/lat)
-
-    Parameters
-    ----------
-    year : int
-        election year
-    """
-    filedata = geometry_files[year]
-    filename = filedata["filename"]
-    layer = filedata["layer"]
-
-    if not os.path.exists(os.path.join(datadir, filename)):
-        print(f"please download shape file {filename} with get_geometries()")
-        return
-
-    # load GeoDataFrame
-    gdf = gpd.read_file(os.path.join(datadir, filename),
-                        layer=layer, encoding="latin1")
-    # dissolve ridings
-    gdf = gdf.dissolve(by="FED_NUM")
-
-    # switch coordinate system to extract centroid, then switch back
-    gdf = gdf.to_crs(epsg=2263)
-    gdf["centroid"] = gdf.centroid
-    # switch back to longitude/latitude
-    gdf = gdf.to_crs(epsg=4326)
-    gdf["centroid"] = gdf["centroid"].to_crs(epsg=4326)
-
-    gdf["centroid_lon"] = gdf["centroid"].x
-    gdf["centroid_lat"] = gdf["centroid"].y
-
-    inv_riding_map = get_inv_riding_map(year)
-    gdf["DistrictName"] = gdf.index.map(inv_riding_map)
-
-    # write to CSV file
-    (gdf
-     .reset_index()
-     .get(["FED_NUM", "DistrictName", "centroid_lon", "centroid_lat"])
-     .to_csv(os.path.join(datadir, f"{year}_riding_centroids.csv"),
-             index=None))
-
-
-def haversine(p1, p2):
-    """
-    Compute haversine distance argument between two points
-
-    Parameters
-    ----------
-    p1 : (float, float)
-        first point in (longitude, latitude) degrees
-    p2 : (float, float)
-        second point
-
-    Returns
-    -------
-    float
-        2 * ( sin( d / (2 R) ) ) ^2
-    """
-    p1 = pi / 180. * p1[0], pi / 180. * p1[1]
-    p2 = pi / 180. * p2[0], pi / 180. * p2[1]
-    dlat = p2[1] - p1[1]
-    dlon = p2[0] - p1[0]
-    return 1.0 - cos(dlat) + cos(p1[1]) * cos(p2[1]) * (1.0 - cos(dlon))
-
-
-def get_nearest_ridings(riding, n=10, year=2021):
-    """
-    Get list of nearest ridings to given riding (by centroid distance)
-
-    Parameters
-    ----------
-    riding : str
-        name of riding
-    n : int
-        number of ridings to return
-    year : int
-        election year
-
-    Returns
-    -------
-    list
-        names of nearest ridings
-    """
-    if not os.path.exists(os.path.join(datadir,
-                                       f"{year}_riding_centroids.csv")):
-        compute_riding_centroids(year)
-
-    df_centroids = pd.read_csv(os.path.join(datadir,
-                                            f"{year}_riding_centroids.csv"),
-                               encoding="latin1")
-
-    p1 = (df_centroids
-          .loc[df_centroids["DistrictName"] == riding]
-          .get(["centroid_lon", "centroid_lat"])
-          .iloc[0]
-          .values)
-
-    dists = (df_centroids
-             .apply(lambda row: haversine(p1,
-                                          row[["centroid_lon",
-                                               "centroid_lat"]].values),
-                    axis=1)
-             .sort_values())
-    return df_centroids.loc[dists.index[:n], "DistrictName"].tolist()
 
 
 def validate_ridings(ridings, year=2021):

@@ -7,14 +7,13 @@ Email:   mark.fruman@yahoo.com
 -------------------------------------------------------
 """
 from copy import copy
+from .utils import validate_ridings
 from .constants import areas
 from . import votes, geometry, viz
-from .utils import validate_ridings
 
 
 class CanadaVotes:
     def __init__(self, years=2021, **kwargs):
-        self.area = kwargs.get("area", None)
         self.ridings = kwargs.get("ridings", None)
         self.years = years
 
@@ -29,8 +28,9 @@ class CanadaVotes:
                 return
 
         if self.ridings is None:
-            if self.area is not None:
-                self.ridings = copy(areas.get(self.area, None))
+            area = kwargs.get("area", None)
+            if area is not None:
+                self.ridings = copy(areas.get(area, []))
             if self.ridings is None:
                 print("please specify a valid area or list of ridings")
 
@@ -49,7 +49,7 @@ class CanadaVotes:
 
         return self
 
-    def load_geometries(self, year):
+    def load_geometries(self, year, robust=False):
         ridings = validate_ridings(ridings=self.ridings, year=year)
         self.data[year]["gdf_eday"] = (geometry
                                        .load_geometries(ridings=ridings,
@@ -60,7 +60,8 @@ class CanadaVotes:
                                                advance=True)
         self.data[year]["gdf_advance"] = gdf_advance
         self.data[year]["gdf_ridings"] = (geometry
-                                          .dissolve_ridings(gdf=gdf_advance))
+                                          .dissolve_ridings(gdf=gdf_advance,
+                                                            robust=robust))
         return self
 
     def load_votes(self, year):
@@ -69,7 +70,7 @@ class CanadaVotes:
                                                       year=year)
         return self
 
-    def merge_votes(self, year):
+    def merge_votes(self, year, robust=False):
         # election-day polls
         self.data[year]["gdf_eday"] = (
             geometry.merge_votes(gdf=self.data[year]["gdf_eday"],
@@ -78,7 +79,8 @@ class CanadaVotes:
 
         # merge geometries of polls with merged counting
         self.data[year]["gdf_eday_merged"] = (
-            geometry.combine_mergedwith_columns(self.data[year]["gdf_eday"])
+            geometry.combine_mergedwith_columns(self.data[year]["gdf_eday"],
+                                                robust=robust)
         )
 
         # advance polls
@@ -95,7 +97,7 @@ class CanadaVotes:
 
         return self
 
-    def load(self):
+    def load(self, robust=False):
         """
         load and merge all data for ridings specified
         """
@@ -103,9 +105,9 @@ class CanadaVotes:
             if year not in self.data:
                 self.data[year] = {}
             print(f"loading year {year} . . .")
-            self.load_geometries(year=year)
+            self.load_geometries(year=year, robust=robust)
             self.load_votes(year=year)
-            self.merge_votes(year=year)
+            self.merge_votes(year=year, robust=robust)
             print("                        Loaded.")
         return self
 
