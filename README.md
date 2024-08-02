@@ -1,21 +1,22 @@
-# Mapping the 2021 Canadian Federal Election
+# Mapping Recent Canadian Federal Elections
 - by Mark Fruman mark.fruman@yahoo.com
 
 ## Fetch geometry and vote results data
+- Data available for general elections of 2008, 2011, 2015, 2019, 2021
+- Note that some riding names and shapes change from election to election
+  so separate geometry files are needed for each election
 
 ```python
 import canadavotes as cdv
 
-# download vote data
-cdv.get_all_vote_data()
+# download vote data for 2021
+cdv.get_all_vote_data(year=2021)
 
 # download geometry files for election-day poll boundaries
-cdv.get_geometries()
-# download geometry files for advance poll boundaries
-cdv.get_geometries(advance=True)
+cdv.get_geometries(year=2021)
 
 # generate province-specific geometry files (for speed and memory efficiency)
-cdv.generate_provincial_geometries()
+cdv.generate_provincial_geometries(year=2021)
 ```
 ## Basic usage
 
@@ -23,9 +24,9 @@ cdv.generate_provincial_geometries()
 import canadavotes as cdv
 
 # instantiate a CanadaVotes object with a list of ridings or predefined area
-toronto = cdv.CanadaVotes(area="downtown_toronto")
+toronto = cdv.CanadaVotes(area="downtown_toronto", years=[2019, 2021])
 
-# predefined areas:
+# some predefined areas:
 #   "downtown_toronto", "north_toronto",
 #   "scarborough", "etobicoke", "mississauga",
 #   "vaughan", "brampton",
@@ -34,22 +35,51 @@ toronto = cdv.CanadaVotes(area="downtown_toronto")
 #   "calgary", "winnipeg", "montreal", "quebec",
 #   "pei"
 
-# load all data for specified ridings
+toronto
+```
+
+```output
+CanadaVotes object
+Years: 2019 2021
+Ridings:
+	Davenport
+	Spadina--Fort York
+	Toronto Centre
+	Toronto--Danforth
+	Toronto--St. Paul's
+	University--Rosedale
+```
+
+```python
+# load all data for the specified ridings and years
 toronto.load()
 ```
 ```output
+Loading year 2019 . . . loaded.
+Loading year 2021 . . . loaded.
+
 CanadaVotes object
+Years: 2019 2021
 Ridings:
-	Toronto Centre
-	University--Rosedale
-	Spadina--Fort York
 	Davenport
-	Toronto--St. Paul's
+	Spadina--Fort York
+	Toronto Centre
 	Toronto--Danforth
-Advance poll geometries: loaded
-Election day geometries: loaded
-Votes data: loaded
-Parties:
+	Toronto--St. Paul's
+	University--Rosedale
+Election 2019 parties:
+	Animal Protection Party
+	Communist
+	Conservative
+	Green Party
+	Independent
+	Liberal
+	ML
+	NDP-New Democratic Party
+	Parti Rhinocéros Party
+	People's Party
+	Stop Climate Change
+Election 2021 parties:
 	Animal Protection Party
 	Communist
 	Conservative
@@ -59,10 +89,16 @@ Parties:
 	NDP-New Democratic Party
 	People's Party - PPC
 ```
+
+```python
+# add riding and load again (i.e. update data)
+toronto.add_riding("Toronto--St. Paul's").load()
+```
+
 #### Some simple vote analysis
 ```python
 # total votes across all ridings in area by party
-toronto.votes(by="Party")
+toronto.votes(by="Party", year=2021)
 ```
 | Party                    |   Votes |   TotalVotes |   VoteFraction |
 |:-------------------------|--------:|-------------:|---------------:|
@@ -77,7 +113,7 @@ toronto.votes(by="Party")
 
 ```python
 # total votes by individual candidate
-toronto.votes(by="Candidate")
+toronto.votes(by="Candidate", year=2021)
 ```
 
 |    | Candidate                     | Party                    | DistrictName         |   Votes |   TotalVotes |   VoteFraction |
@@ -124,14 +160,14 @@ toronto.votes(by="Candidate")
 #### Plot vote results
 ```python
 # plot Conservative Party of Canada vote fraction by election-day poll station
-toronto.plot_votes(party="Conservative", advance=False,
+toronto.plot_votes(party="Conservative", advance=False, year=2021,
                    plot_variable="VoteFraction")
 ```
 ![downtown toronto e-day Conservative](images/downtown_eday_Conservative.png)
 
 ```python
 # compare Liberal and NDP vote fraction by advance poll (include election day votes)
-toronto.plot_compare(party1="Liberal", party2="NDP-New Democratic Party",
+toronto.plot_compare(party1="Liberal", party2="NDP-New Democratic Party", year=2021,
                      advance=True, plot_variable="AllVoteFraction")
 ```
 ![downtown toronto e-day Lib vs NDP](images/downtown_allvotes_Lib_v_NDP.png)
@@ -140,34 +176,36 @@ toronto.plot_compare(party1="Liberal", party2="NDP-New Democratic Party",
 ```python
 # People's Party vote share with a Mapnik background
 toronto.plot_votes(party="People's Party - PPC", advance=False,
-                   plot_variable="VoteFraction", basemap="Mapnik",
-                   figsize=(12, 6))
+                   plot_variable="VoteFraction", year=2021,
+                   basemap="Mapnik", figsize=(12, 6))
 ```
 ![downtown toronto e-day PPC Mapnik](images/downtown_eday_PPC_with_Mapnik.png)
 
 #### Find ridings by proximity
 ```python
 # query riding by regex pattern
-cdv.query_ridings(".*Vic")
+cdv.query_ridings(".*Vic", year=2021)
 ```
 ```output
 ['Sydney--Victoria', 'Victoria']
 ```
 ```python
-victoria = cdv.CanadaVotes(ridings=cdv.get_nearest_ridings("Victoria", n=4))
+victoria = cdv.CanadaVotes(ridings=cdv.get_nearest_ridings("Victoria", 
+                                                           year=2021, n=4),
+                           years=2021)
 victoria.load()
 ```
 ```output
+Loading year 2021 . . . loaded.
+
 CanadaVotes object
+Years: 2021
 Ridings:
 	Victoria
 	Esquimalt--Saanich--Sooke
 	Saanich--Gulf Islands
 	Cowichan--Malahat--Langford
-Advance poll geometries: loaded
-Election day geometries: loaded
-Votes data: loaded
-Parties:
+Election 2021 parties:
 	Animal Protection Party
 	Communist
 	Conservative
@@ -177,25 +215,23 @@ Parties:
 	People's Party - PPC
 ```
 ```python
-# plot Green party share over "Voyager" basemap
-victoria.plot_votes(party="Green Party", advance=True,
-                    plot_variable="AllVoteFraction",
-                    basemap="Voyager", figsize=(20, 8))
+# plot Green Party vs. NDP share over "Voyager" basemap
+victoria.plot_compare(party1="Green Party", party2="NDP-New Democratic Party", year=2021,
+                      advance=True, plot_variable="AllVoteFraction", basemap="Voyager",
+                      figsize=(20,8))
 ```
-![victoria_proximity Green Voyager](images/victoria_allvotes_Green_with_Voyager.png)
+![victoria_proximity Green v NDP Voyager](images/victoria_allvotefrac_Green_v_NDP_with_Voyager.png)
 
 ## References:
-#### Maps of Ontario electoral districts
-- https://www.elections.ca/content.aspx?section=res&dir=cir/maps2/ontario&document=index&lang=e
+#### Maps of current electoral districts
+- https://www.elections.ca/content.aspx?section=res&dir=cir/maps2&document=index&lang=e
 
-#### Shape-file data for polling station boundaries
+#### Shape-file data for polling station boundaries (2021)
 - Documentation:<BR> https://ftp.maps.canada.ca/pub/elections_elections/Electoral-districts_Circonscription-electorale/Elections_Canada_2021/Elections_Canada_2021_Data_Dictionary.pdf
 - Election-day polling stations (2021):<BR>https://open.canada.ca/data/en/dataset/0ed37cd6-d831-4183-bf43-b05e29570298
-- Advance polling stations (2021):<BR>https://open.canada.ca/data/en/dataset/34a8484d-5a00-4e34-a235-75881141385e
 
 #### Results for 2021 Canadian federal election
 - https://elections.ca/content.aspx?section=res&dir=rep/off/44gedata&document=bypro&lang=e
-- https://elections.ca/res/rep/off/ovr2021app/53/data_donnees/pollbypoll_bureauparbureau35.zip
 
 #### List of riding names and numbers
-- https://elections.ca/content.aspx?section=res&dir=rep/off/44gedata&document=byed&lang=e#ON
+- https://elections.ca/content.aspx?section=res&dir=rep/off/44gedata&document=byed&lang=e
