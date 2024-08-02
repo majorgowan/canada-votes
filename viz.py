@@ -176,6 +176,7 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
         else:
             print("specified provider not implemented")
         if provider is not None:
+            # noinspection PyTypeChecker
             cx.add_basemap(ax, crs=gdf_vote.crs, attribution=False,
                            source=provider)
 
@@ -293,6 +294,7 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
         else:
             print("'basemap' must be one of 'Mapnik', 'Voyager' or 'Positron'")
             return ax
+        # noinspection PyTypeChecker
         cx.add_basemap(ax, crs=gdf_vote.crs, attribution=False,
                        source=provider)
 

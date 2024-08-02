@@ -55,7 +55,8 @@ class CanadaVotes:
         }
         self.loaded[year] = set()
 
-    def _load_geometries(self, year, ridings, robust=False):
+    @staticmethod
+    def _load_geometries(year, ridings, robust=False):
         gdf_eday = geometry.load_geometries(ridings=ridings, year=year,
                                             advance=False)
         gdf_advance = geometry.load_geometries(ridings=ridings,
@@ -65,10 +66,12 @@ class CanadaVotes:
 
         return gdf_eday, gdf_advance, gdf_ridings
 
-    def _load_votes(self, year, ridings):
+    @staticmethod
+    def _load_votes(year, ridings):
         return votes.load_vote_data(ridings=ridings, year=year)
 
-    def _merge_votes(self, gdf_eday, gdf_advance, vdf, robust=False):
+    @staticmethod
+    def _merge_votes(gdf_eday, gdf_advance, vdf, robust=False):
         # election-day polls
         gdf_eday = geometry.merge_votes(gdf=gdf_eday, df_vote=vdf)
         gdf_eday_merged = (geometry
@@ -263,7 +266,7 @@ class CanadaVotes:
         for year in self.data:
             return_str += f"Election {year} parties:\n"
             parties = self.parties(year)
-            if len(parties) > 0:
+            if len(list(parties)) > 0:
                 for party in parties:
                     return_str += f"\t{party}\n"
             else:

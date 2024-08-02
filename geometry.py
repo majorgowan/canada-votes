@@ -313,7 +313,6 @@ def robust_dissolve(gdf, by=None, aggfunc=None, verbose=False):
     return gdf
 
 
-
 def generate_provincial_geometries(year=2021):
     """
     Split the country-wide file into province files (to save memory).
