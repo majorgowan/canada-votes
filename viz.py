@@ -160,7 +160,7 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
         ridings_args0 = {"color": "None",
                          "labels": True,
                          "linewidth": 1,
-                         "edgecolor": "gray"}
+                         "edgecolor": "darkslategrey"}
         ridings_args0.update(ridings_args)
         ridings_plot(gdf_ridings, year=year, ax=ax, **ridings_args0)
 
@@ -264,7 +264,7 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
         ridings_args0 = {"color": "None",
                          "labels": True,
                          "linewidth": 1,
-                         "edgecolor": "gray"}
+                         "edgecolor": "darkslategrey"}
         ridings_args0.update(ridings_args)
         ridings_plot(gdf_ridings, year=year, ax=ax, **ridings_args0)
 

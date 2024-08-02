@@ -485,11 +485,12 @@ def get_nearest_ridings(riding, n=10, year=2021):
     """
     if not os.path.exists(os.path.join(datadir,
                                        f"{year}_riding_centroids.csv")):
+        print("computing and caching riding centroids . . .")
         compute_riding_centroids(year)
 
     df_centroids = pd.read_csv(os.path.join(datadir,
                                             f"{year}_riding_centroids.csv"),
-                               encoding="latin1")
+                               encoding="utf-8")
 
     p1 = (df_centroids
           .loc[df_centroids["DistrictName"] == riding]

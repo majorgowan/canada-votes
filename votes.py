@@ -10,7 +10,7 @@ import os
 import re
 import pandas as pd
 from zipfile import ZipFile
-from .constants import datadir, provcodes, codeprovs
+from .constants import datadir, provcodes, codeprovs, votes_encodings
 from .utils import (get_int_part, area_to_ridings, apply_riding_map,
                     validate_ridings)
 
@@ -55,6 +55,8 @@ def load_vote_data_prov(year, province, ridings=None):
         "Merge With/Fusionné avec": "str",
         "Polling Station Number/Numéro du bureau de scrutin": "str"
     }
+    # note below apparent repeated keys have different apostrophe characters
+    # (to handle vote results tables from different years)
     column_renaming_map = {
         "Polling Station Number/Numéro du bureau de scrutin": "Poll",
         "Polling Station Name/Nom du bureau de scrutin": "PollStationName",
@@ -63,6 +65,11 @@ def load_vote_data_prov(year, province, ridings=None):
             "CandidateLastName",
         "Candidate’s First Name/Prénom du candidat": "CandidateFirstName",
         "Candidate’s Middle Name/Second prénom du candidat":
+            "CandidateMiddleName",
+        "Candidate's Family Name/Nom de famille du candidat":
+            "CandidateLastName",
+        "Candidate's First Name/Prénom du candidat": "CandidateFirstName",
+        "Candidate's Middle Name/Second prénom du candidat":
             "CandidateMiddleName",
         "Political Affiliation Name_English/Appartenance politique_Anglais":
             "Party",
@@ -86,7 +93,7 @@ def load_vote_data_prov(year, province, ridings=None):
     }
 
     # text encoding changes in 2015 (oh boy)
-    csv_encoding = "utf-8" if year >= 2015 else "latin-1"
+    csv_encoding = votes_encodings.get(year, "utf-8")
     # regex pattern for riding file
     pat = re.compile(r".*pollresults.*([0-9]{5}).*")
 

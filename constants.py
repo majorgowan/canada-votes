@@ -25,6 +25,14 @@ geometry_files = {
            "layer": None}
 }
 
+votes_encodings = {
+    2008: "latin-1",
+    2011: "latin-1",
+    2015: "utf-8",
+    2019: "utf-8",
+    2021: "utf_8"
+}
+
 provcodes = {
     "AB": 48,
     "BC": 59,
@@ -49,7 +57,9 @@ partycolours = {
     "Bloc Québécois": "lightblue",
     "NDP-New Democratic Party": "orange",
     "Green Party": "green",
-    "People's Party - PPC": "purple"
+    "People's Party - PPC": "purple",
+    "People's Party": "purple",
+    "Communist": "pink"
 }
 
 areas = {
@@ -125,7 +135,10 @@ areas = {
     "milton": [
         "Burlington",
         "Guelph",
+        "Halton",
         "Milton",
+        "Oakville",
+        "Oakville North--Burlington",
         "Wellington--Halton Hills"
     ],
     "mississauga": [

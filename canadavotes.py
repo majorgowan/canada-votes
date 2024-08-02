@@ -97,18 +97,18 @@ class CanadaVotes:
 
         return self
 
-    def load(self, robust=False):
+    def load(self, robust=True):
         """
         load and merge all data for ridings specified
         """
         for year in self.years:
             if year not in self.data:
                 self.data[year] = {}
-            print(f"loading year {year} . . .")
+            print(f"Loading year {year} . . . ", end="")
             self.load_geometries(year=year, robust=robust)
             self.load_votes(year=year)
             self.merge_votes(year=year, robust=robust)
-            print("                        Loaded.")
+            print("loaded.")
         return self
 
     def plot_votes(self, party, year=None, plot_variable="VoteFraction",
@@ -200,9 +200,10 @@ class CanadaVotes:
 
             elif by.lower() == "candidate":
                 df = (self.data[year]["vdf"]
-                      .get(["Candidate", "Party", "DistrictName",
+                      .get(["Party", "DistrictName",
                             "CandidateLastName", "CandidateFirstName",
-                            "ElectedIndicator", "Votes", "TotalVotes"]))
+                            "ElectedIndicator", "Votes", "TotalVotes"])
+                      .copy())
                 df["Estring"] = (df["ElectedIndicator"]
                                  .map(lambda val: ("  (Elected)"
                                                    if val == "Y" else "")))
@@ -233,20 +234,8 @@ class CanadaVotes:
         for rid in self.ridings:
             return_str += f"\t{rid}\n"
         for year in self.data:
-            return_str += f"Election year {year}:\n"
-            for element, description in [("gdf_advance",
-                                          "Advance poll geometries"),
-                                         ("gdf_eday",
-                                          "Election day geometries"),
-                                         ("vdf", "Votes data")]:
-                return_str += f"{description}: "
-                if element in self.data[year]:
-                    return_str += "loaded\n"
-                else:
-                    return_str += "not loaded\n"
-            if "vdf" in self.data[year]:
-                return_str += f"Parties:\n"
-                for party in self.parties(year):
-                    return_str += f"\t{party}\n"
+            return_str += f"Election {year} parties:\n"
+            for party in self.parties(year):
+                return_str += f"\t{party}\n"
         return_str += "\n"
         return return_str

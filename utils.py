@@ -11,7 +11,7 @@ import os
 import json
 import pandas as pd
 from zipfile import ZipFile
-from .constants import datadir, provcodes, areas
+from .constants import datadir, provcodes, areas, votes_encodings
 
 
 def get_int_part(s):
@@ -111,19 +111,22 @@ def update_riding_map_file(province, year):
         print("Please first download votes file with get_vote_data()")
         return
 
+    csv_encoding = votes_encodings.get(year, "utf-8")
+
     with ZipFile(votesfile, "r") as zf:
         for fname in zf.namelist():
             # iterate over CSV files in the zip and extract
             # riding names and numbers from first line
             if re.match(r"pollresults.*csv", fname):
-                temp_df = pd.read_csv(zf.open(fname), encoding="latin1")
+                temp_df = pd.read_csv(zf.open(fname), encoding=csv_encoding)
                 riding_number, riding_name = temp_df.iloc[0, :2].values
                 # for some crazy reason, in 2008, riding names end in " (?!)
                 riding_name = riding_name.strip("\"")
                 riding_map[riding_name] = int(riding_number)
 
     # write updated riding_map back to disk
-    write_json(riding_map, riding_map_file, indent=2, sort_keys=True)
+    write_json(riding_map, riding_map_file, ensure_ascii=False,
+               indent=2, sort_keys=True)
 
 
 def get_riding_map(year):
