@@ -6,109 +6,136 @@ Author:  Mark Fruman
 Email:   mark.fruman@yahoo.com
 -------------------------------------------------------
 """
-from copy import copy
+import pandas as pd
+import geopandas as gpd
 from .utils import validate_ridings
 from .constants import areas
 from . import votes, geometry, viz
 
 
 class CanadaVotes:
-    def __init__(self, years=2021, **kwargs):
-        self.ridings = kwargs.get("ridings", None)
-        self.years = years
-
-        # if years is a single year, set it to a list of length 1
-        if isinstance(self.years, int):
-            self.years = [years]
-
-        for year in self.years:
-            if year not in [2008, 2011, 2015, 2019, 2021]:
-                print("year {year} invalid")
-                print("year must be one of: 2008, 2011, 2015, 2019, 2021")
-                return
-
-        if self.ridings is None:
-            area = kwargs.get("area", None)
-            if area is not None:
-                self.ridings = copy(areas.get(area, []))
-            if self.ridings is None:
-                print("please specify a valid area or list of ridings")
-
+    def __init__(self, years=2021, area=None, ridings=None):
         # initialize data to empty dictionary
+        self.years = []
         self.data = {}
+        self.ridings = set()
+        self.loaded = {}
+        self.add_ridings(area=area, ridings=ridings)
 
-    def add_ridings(self, area=None, ridings=None):
-        new_ridings = []
-        if area is not None:
-            new_ridings += copy(areas.get(area, []))
-        if ridings is not None:
-            new_ridings += ridings
+        if isinstance(years, int):
+            self.add_year(years)
+        elif isinstance(years, list):
+            for year in years:
+                self.add_year(year)
 
-        self.ridings += [rid for rid in new_ridings
-                         if rid not in self.ridings]
-
+    def add_year(self, year):
+        if year not in [2008, 2011, 2015, 2019, 2021]:
+            print("year {year} invalid")
+            print("year must be one of: 2008, 2011, 2015, 2019, 2021")
+        if year not in self.years:
+            self.years = sorted([year] + self.years)
+            self._init_year(year)
         return self
 
-    def load_geometries(self, year, robust=False):
-        ridings = validate_ridings(ridings=self.ridings, year=year)
-        self.data[year]["gdf_eday"] = (geometry
-                                       .load_geometries(ridings=ridings,
-                                                        year=year,
-                                                        advance=False))
+    def add_ridings(self, area=None, ridings=None):
+        if ridings is not None:
+            self.ridings = self.ridings.union(ridings)
+        if area is not None:
+            self.ridings = self.ridings.union(areas.get(area, []))
+        return self
+
+    def _init_year(self, year):
+        # initialize empty dataframes for new year
+        self.data[year] = {
+            "gdf_eday": gpd.GeoDataFrame(),
+            "gdf_eday_merged": gpd.GeoDataFrame(),
+            "gdf_advance": gpd.GeoDataFrame(),
+            "gdf_ridings": gpd.GeoDataFrame(),
+            "vdf": pd.DataFrame()
+        }
+        self.loaded[year] = set()
+
+    def _load_geometries(self, year, ridings, robust=False):
+        gdf_eday = geometry.load_geometries(ridings=ridings, year=year,
+                                            advance=False)
         gdf_advance = geometry.load_geometries(ridings=ridings,
                                                year=year,
                                                advance=True)
-        self.data[year]["gdf_advance"] = gdf_advance
-        self.data[year]["gdf_ridings"] = (geometry
-                                          .dissolve_ridings(gdf=gdf_advance,
-                                                            robust=robust))
-        return self
+        gdf_ridings = geometry.dissolve_ridings(gdf=gdf_advance, robust=robust)
 
-    def load_votes(self, year):
-        ridings = validate_ridings(ridings=self.ridings, year=year)
-        self.data[year]["vdf"] = votes.load_vote_data(ridings=ridings,
-                                                      year=year)
-        return self
+        return gdf_eday, gdf_advance, gdf_ridings
 
-    def merge_votes(self, year, robust=False):
+    def _load_votes(self, year, ridings):
+        return votes.load_vote_data(ridings=ridings, year=year)
+
+    def _merge_votes(self, gdf_eday, gdf_advance, vdf, robust=False):
         # election-day polls
-        self.data[year]["gdf_eday"] = (
-            geometry.merge_votes(gdf=self.data[year]["gdf_eday"],
-                                 df_vote=self.data[year]["vdf"])
-        )
-
-        # merge geometries of polls with merged counting
-        self.data[year]["gdf_eday_merged"] = (
-            geometry.combine_mergedwith_columns(self.data[year]["gdf_eday"],
-                                                robust=robust)
-        )
-
+        gdf_eday = geometry.merge_votes(gdf=gdf_eday, df_vote=vdf)
+        gdf_eday_merged = (geometry
+                           .combine_mergedwith_columns(gdf=gdf_eday,
+                                                       robust=robust))
         # advance polls
-        self.data[year]["gdf_advance"] = (
-            geometry.merge_votes(gdf=self.data[year]["gdf_advance"],
-                                 df_vote=self.data[year]["vdf"])
-        )
+        gdf_advance = (geometry
+                       .merge_votes(gdf=gdf_advance,
+                                    df_vote=vdf))
 
         # add columns for election-day votes in advance poll areas
-        self.data[year]["gdf_advance"] = (
-            votes.add_eday_votes(self.data[year]["gdf_eday"],
-                                 self.data[year]["gdf_advance"])
+        gdf_advance = (
+            votes.add_eday_votes(gdf_eday=gdf_eday,
+                                 gdf_advance=gdf_advance)
         )
 
-        return self
+        # set index on gdf_eday for consistency
+        gdf_eday = gdf_eday.set_index(["DistrictName", "Party", "PD_NUM"])
+
+        return gdf_eday, gdf_eday_merged, gdf_advance
+
+    def _load_all(self, year, ridings, robust=False):
+        (gdf_eday,
+         gdf_advance,
+         gdf_ridings) = self._load_geometries(year=year,
+                                              ridings=ridings,
+                                              robust=robust)
+        vdf = self._load_votes(year=year, ridings=ridings)
+        (gdf_eday,
+         gdf_eday_merged,
+         gdf_advance) = self._merge_votes(gdf_eday=gdf_eday,
+                                          gdf_advance=gdf_advance,
+                                          vdf=vdf, robust=robust)
+        # append new data to object data
+        self.data[year]["gdf_eday"] = pd.concat(
+            (self.data[year]["gdf_eday"], gdf_eday)
+        )
+        self.data[year]["gdf_eday_merged"] = pd.concat(
+            (self.data[year]["gdf_eday_merged"], gdf_eday_merged)
+        )
+        self.data[year]["gdf_advance"] = pd.concat(
+            (self.data[year]["gdf_advance"], gdf_advance)
+        )
+        self.data[year]["gdf_ridings"] = pd.concat(
+            (self.data[year]["gdf_ridings"], gdf_ridings)
+        )
+        self.data[year]["vdf"] = pd.concat(
+            (self.data[year]["vdf"], vdf)
+        )
+
+        # update loaded dictionary
+        self.loaded[year] = self.loaded[year].union(ridings)
 
     def load(self, robust=True):
         """
         load and merge all data for ridings specified
         """
         for year in self.years:
-            if year not in self.data:
-                self.data[year] = {}
             print(f"Loading year {year} . . . ", end="")
-            self.load_geometries(year=year, robust=robust)
-            self.load_votes(year=year)
-            self.merge_votes(year=year, robust=robust)
+            new_ridings = validate_ridings(
+                list(self.ridings.difference(self.loaded[year])),
+                year=year
+            )
+            if len(list(new_ridings)) > 0:
+                self._load_all(year, new_ridings, robust=robust)
             print("loaded.")
+
         return self
 
     def plot_votes(self, party, year=None, plot_variable="VoteFraction",
@@ -166,10 +193,10 @@ class CanadaVotes:
         list
             parties with candidates in the selected ridings
         """
-        if year not in self.data:
-            print("please load data first with load() or load_votes()")
-            return None
-        return sorted(self.data[year]["vdf"]["Party"].unique().tolist())
+        if len(self.data[year]["vdf"]) > 0:
+            return sorted(self.data[year]["vdf"]["Party"].unique().tolist())
+        else:
+            return []
 
     def votes(self, year, by="Party", key="Votes"):
         """
@@ -235,7 +262,11 @@ class CanadaVotes:
             return_str += f"\t{rid}\n"
         for year in self.data:
             return_str += f"Election {year} parties:\n"
-            for party in self.parties(year):
-                return_str += f"\t{party}\n"
+            parties = self.parties(year)
+            if len(parties) > 0:
+                for party in parties:
+                    return_str += f"\t{party}\n"
+            else:
+                return_str += "\tnot loaded\n"
         return_str += "\n"
         return return_str
