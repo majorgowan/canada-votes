@@ -137,7 +137,7 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
             return
 
     if "cmap" not in kwargs:
-        partycolour = partycolours.get(party, "black")
+        partycolour = partycolours.get(party, "cadetblue")
         cmap = (LinearSegmentedColormap
                 .from_list("Custom", colors=["white", partycolour],
                            N=256))
@@ -184,12 +184,13 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
 
 
 # noinspection PyTypeChecker
-def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
+def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
                           plot_variable="VoteFraction", figsize=None,
                           ridings_args=None, basemap=None, year=2021,
                           **kwargs):
     """
-    visualize votes for single party by polling station
+    visualize votes difference between two parties.  If one or both parties
+    not specified, remaining party or parties with highest vote share used.
 
     Parameters
     ----------
@@ -225,27 +226,63 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
     plt.figure(figsize=figsize)
 
     if plot_variable not in gdf_vote.columns:
-        if plot_variable == "VoteFraction":
-            gdf_vote = compute_vote_fraction(gdf_vote)
-        else:
-            print(f"{plot_variable} not in dataframe")
-            return
+        print(f"{plot_variable} not in dataframe")
+        return
 
+    # if parties not specified, use parties with highest total vote share
+    if party1 is None or party2 is None:
+        df_party_votes = (gdf_vote
+                          .reset_index()
+                          .get(["Party", "Votes"])
+                          .groupby("Party")
+                          .sum()
+                          .sort_values("Votes", ascending=False))
+        party_a, party_b = df_party_votes.index[:2]
+        if party1 is None:
+            if party2 is None:
+                party1, party2 = party_a, party_b
+            elif party2 == party_a:
+                party1 = party_b
+            else:
+                party1 = party_a
+        elif party1 == party_a:
+            party2 = party_b
+        else:
+            party2 = party_a
+
+    # select the subsets for the two parties
     gdf1 = (gdf_vote
-            .reset_index("DistrictName")
-            .loc[party1]).copy()
+            .xs(level="Party", key=party1)
+            .copy())
 
     gdf2 = (gdf_vote
-            .reset_index("DistrictName")
-            .loc[party2])
+            .xs(level="Party", key=party2)
+            .copy())
 
+    # check if indexes of the two party tables match (it won't if one
+    # or the other party is not represented in some locations, in which case
+    # the subtraction of the plot_variable will fail)
+    if not gdf1.index.equals(gdf2.index):
+        # compute a common index and apply it to each frame
+        index_union = gdf1.index.union(gdf2.index)
+        gdf1 = gdf1.reindex(index_union)
+        gdf2 = gdf2.reindex(index_union)
+
+        # fill the missing values of the plot_variable column with zeros
+        gdf1[plot_variable] = gdf1[plot_variable].fillna(0)
+        gdf2[plot_variable] = gdf2[plot_variable].fillna(0)
+
+        # fill the missing geometries with the values from the other party
+        gdf1["geometry"] = gdf1["geometry"].fillna(gdf2["geometry"])
+
+    # cmopute the difference and Bob should be your uncle
     gdf1["Difference"] = gdf1[plot_variable] - gdf2[plot_variable]
 
-    colour1 = partycolours[party2]
-    colour2 = partycolours[party1]
+    colour1 = partycolours.get(party1, "lightcoral")
+    colour2 = partycolours.get(party2, "cadetblue")
     custom_cmap = (LinearSegmentedColormap
                    .from_list("Custom",
-                              colors=[colour1, "white", colour2],
+                              colors=[colour2, "white", colour1],
                               N=256))
 
     crange_max = gdf1["Difference"].abs().max()
@@ -273,11 +310,11 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
     cbar = plt.gcf().axes[-1]
     cbar.text(-0.35, 1.03, s=party1.split(" ")[0].split("-")[0],
               ha='left', va='center',
-              size=14, color=partycolours[party1],
+              size=14, color=colour1,
               transform=cbar.transAxes)
     cbar.text(-0.35, -0.03, s=party2.split(" ")[0].split("-")[0],
               ha='left', va='center',
-              size=14, color=partycolours[party2],
+              size=14, color=colour2,
               transform=cbar.transAxes)
     cbar.set_title(plot_variable, y=0.5, x=3.3, va="center",
                    size=14, rotation=-90)

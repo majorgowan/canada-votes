@@ -8,7 +8,7 @@ Email:   mark.fruman@yahoo.com
 """
 import pandas as pd
 import geopandas as gpd
-from .utils import validate_ridings
+from .utils import validate_ridings, apply_riding_map
 from .constants import areas
 from . import votes, geometry, viz
 
@@ -20,7 +20,7 @@ class CanadaVotes:
         self.data = {}
         self.ridings = set()
         self.loaded = {}
-        self.add_ridings(area=area, ridings=ridings)
+        self.add_ridings(ridings=ridings, area=area)
 
         if isinstance(years, int):
             self.add_year(years)
@@ -37,11 +37,49 @@ class CanadaVotes:
             self._init_year(year)
         return self
 
-    def add_ridings(self, area=None, ridings=None):
+    def add_ridings(self, ridings=None, area=None):
         if ridings is not None:
             self.ridings = self.ridings.union(ridings)
         if area is not None:
             self.ridings = self.ridings.union(areas.get(area, []))
+        return self
+
+    def drop_ridings(self, ridings):
+        for year in self.years:
+            # remove the requested ridings from each data table
+            valid_ridings = validate_ridings(ridings)
+            if len(list(valid_ridings)) == 0:
+                continue
+            fed_nums = apply_riding_map(year, valid_ridings)
+            self.data[year]["vdf"] = (
+                self.data[year]["vdf"]
+                .get(~self.data[year]["vdf"]["DistrictName"]
+                     .isin(valid_ridings))
+            )
+            self.data[year]["gdf_eday"] = (
+                self.data[year]["gdf_eday"]
+                .drop(index=valid_ridings, level="DistrictName",
+                      errors="ignore")
+            )
+            self.data[year]["gdf_eday_merged"] = (
+                self.data[year]["gdf_eday_merged"]
+                .drop(index=valid_ridings, level="DistrictName",
+                      errors="ignore")
+            )
+            self.data[year]["gdf_advance"] = (
+                self.data[year]["gdf_advance"]
+                .drop(index=valid_ridings, level="DistrictName",
+                      errors="ignore")
+            )
+            self.data[year]["gdf_ridings"] = (
+                self.data[year]["gdf_ridings"]
+                .drop(fed_nums, axis=0, errors="ignore")
+            )
+            # remove loaded flag from the year
+            self.loaded[year].difference_update(valid_ridings)
+
+        # remove the requested ridings from the object
+        self.ridings.difference_update(ridings)
         return self
 
     def _init_year(self, year):
@@ -164,7 +202,7 @@ class CanadaVotes:
         if filename is not None:
             viz.savepng(filename)
 
-    def plot_compare(self, party1, party2, year=None,
+    def plot_compare(self, party1=None, party2=None, year=None,
                      plot_variable="VoteFraction",
                      figsize=None, ridings_args=None, basemap=None,
                      advance=False, filename=None, **kwargs):
@@ -253,6 +291,9 @@ class CanadaVotes:
         else:
             print("please load votes data with load() or load_votes()")
         return None
+
+    def __getitem__(self, item):
+        return self.data[item]
 
     def __repr__(self):
         return_str = f"CanadaVotes object\n"
