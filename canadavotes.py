@@ -20,7 +20,7 @@ class CanadaVotes:
         self.data = {}
         self.ridings = set()
         self.loaded = {}
-        self.add_ridings(area=area, ridings=ridings)
+        self.add_ridings(ridings=ridings, area=area)
 
         if isinstance(years, int):
             self.add_year(years)
@@ -37,7 +37,7 @@ class CanadaVotes:
             self._init_year(year)
         return self
 
-    def add_ridings(self, area=None, ridings=None):
+    def add_ridings(self, ridings=None, area=None):
         if ridings is not None:
             self.ridings = self.ridings.union(ridings)
         if area is not None:
@@ -164,7 +164,7 @@ class CanadaVotes:
         if filename is not None:
             viz.savepng(filename)
 
-    def plot_compare(self, party1, party2, year=None,
+    def plot_compare(self, party1=None, party2=None, year=None,
                      plot_variable="VoteFraction",
                      figsize=None, ridings_args=None, basemap=None,
                      advance=False, filename=None, **kwargs):

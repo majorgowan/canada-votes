@@ -491,6 +491,9 @@ def get_nearest_ridings(riding, n=10, year=2021):
                                             f"{year}_riding_centroids.csv"),
                                encoding="utf-8")
 
+    if (df_centroids["DistrictName"] == riding).sum() == 0:
+        return []
+
     p1 = (df_centroids
           .loc[df_centroids["DistrictName"] == riding]
           .get(["centroid_lon", "centroid_lat"])

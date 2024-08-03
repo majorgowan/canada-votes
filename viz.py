@@ -184,12 +184,13 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
 
 
 # noinspection PyTypeChecker
-def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
+def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
                           plot_variable="VoteFraction", figsize=None,
                           ridings_args=None, basemap=None, year=2021,
                           **kwargs):
     """
-    visualize votes for single party by polling station
+    visualize votes difference between two parties.  If one or both parties
+    not specified, remaining party or parties with highest vote share used.
 
     Parameters
     ----------
@@ -225,11 +226,29 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
     plt.figure(figsize=figsize)
 
     if plot_variable not in gdf_vote.columns:
-        if plot_variable == "VoteFraction":
-            gdf_vote = compute_vote_fraction(gdf_vote)
+        print(f"{plot_variable} not in dataframe")
+        return
+
+    # if parties not specified, use parties with highest total vote share
+    if party1 is None or party2 is None:
+        df_party_votes = (gdf_vote
+                          .reset_index()
+                          .get(["Party", "Votes"])
+                          .groupby("Party")
+                          .sum()
+                          .sort_values("Votes", ascending=False))
+        party_a, party_b = df_party_votes.index[:2]
+        if party1 is None:
+            if party2 is None:
+                party1, party2 = party_a, party_b
+            elif party2 == party_a:
+                party1 = party_b
+            else:
+                party1 = party_a
+        elif party1 == party_a:
+            party2 = party_b
         else:
-            print(f"{plot_variable} not in dataframe")
-            return
+            party2 = party_a
 
     # select the subsets for the two parties
     gdf1 = (gdf_vote
