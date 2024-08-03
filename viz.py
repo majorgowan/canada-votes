@@ -137,7 +137,7 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
             return
 
     if "cmap" not in kwargs:
-        partycolour = partycolours.get(party, "black")
+        partycolour = partycolours.get(party, "cadetblue")
         cmap = (LinearSegmentedColormap
                 .from_list("Custom", colors=["white", partycolour],
                            N=256))
@@ -231,21 +231,39 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
             print(f"{plot_variable} not in dataframe")
             return
 
+    # select the subsets for the two parties
     gdf1 = (gdf_vote
-            .reset_index("DistrictName")
-            .loc[party1]).copy()
+            .xs(level="Party", key=party1)
+            .copy())
 
     gdf2 = (gdf_vote
-            .reset_index("DistrictName")
-            .loc[party2])
+            .xs(level="Party", key=party2)
+            .copy())
 
+    # check if indexes of the two party tables match (it won't if one
+    # or the other party is not represented in some locations, in which case
+    # the subtraction of the plot_variable will fail)
+    if not gdf1.index.equals(gdf2.index):
+        # compute a common index and apply it to each frame
+        index_union = gdf1.index.union(gdf2.index)
+        gdf1 = gdf1.reindex(index_union)
+        gdf2 = gdf2.reindex(index_union)
+
+        # fill the missing values of the plot_variable column with zeros
+        gdf1[plot_variable] = gdf1[plot_variable].fillna(0)
+        gdf2[plot_variable] = gdf2[plot_variable].fillna(0)
+
+        # fill the missing geometries with the values from the other party
+        gdf1["geometry"] = gdf1["geometry"].fillna(gdf2["geometry"])
+
+    # cmopute the difference and Bob should be your uncle
     gdf1["Difference"] = gdf1[plot_variable] - gdf2[plot_variable]
 
-    colour1 = partycolours[party2]
-    colour2 = partycolours[party1]
+    colour1 = partycolours.get(party1, "lightcoral")
+    colour2 = partycolours.get(party2, "cadetblue")
     custom_cmap = (LinearSegmentedColormap
                    .from_list("Custom",
-                              colors=[colour1, "white", colour2],
+                              colors=[colour2, "white", colour1],
                               N=256))
 
     crange_max = gdf1["Difference"].abs().max()
@@ -273,11 +291,11 @@ def votes_comparison_plot(gdf_vote, party1, party2, gdf_ridings=None,
     cbar = plt.gcf().axes[-1]
     cbar.text(-0.35, 1.03, s=party1.split(" ")[0].split("-")[0],
               ha='left', va='center',
-              size=14, color=partycolours[party1],
+              size=14, color=colour1,
               transform=cbar.transAxes)
     cbar.text(-0.35, -0.03, s=party2.split(" ")[0].split("-")[0],
               ha='left', va='center',
-              size=14, color=partycolours[party2],
+              size=14, color=colour2,
               transform=cbar.transAxes)
     cbar.set_title(plot_variable, y=0.5, x=3.3, va="center",
                    size=14, rotation=-90)

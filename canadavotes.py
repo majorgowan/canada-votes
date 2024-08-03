@@ -254,6 +254,9 @@ class CanadaVotes:
             print("please load votes data with load() or load_votes()")
         return None
 
+    def __getitem__(self, item):
+        return self.data[item]
+
     def __repr__(self):
         return_str = f"CanadaVotes object\n"
         return_str += f"Years:"
