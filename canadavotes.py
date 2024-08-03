@@ -8,7 +8,7 @@ Email:   mark.fruman@yahoo.com
 """
 import pandas as pd
 import geopandas as gpd
-from .utils import validate_ridings
+from .utils import validate_ridings, apply_riding_map
 from .constants import areas
 from . import votes, geometry, viz
 
@@ -42,6 +42,44 @@ class CanadaVotes:
             self.ridings = self.ridings.union(ridings)
         if area is not None:
             self.ridings = self.ridings.union(areas.get(area, []))
+        return self
+
+    def drop_ridings(self, ridings):
+        for year in self.years:
+            # remove the requested ridings from each data table
+            valid_ridings = validate_ridings(ridings)
+            if len(list(valid_ridings)) == 0:
+                continue
+            fed_nums = apply_riding_map(year, valid_ridings)
+            self.data[year]["vdf"] = (
+                self.data[year]["vdf"]
+                .get(~self.data[year]["vdf"]["DistrictName"]
+                     .isin(valid_ridings))
+            )
+            self.data[year]["gdf_eday"] = (
+                self.data[year]["gdf_eday"]
+                .drop(index=valid_ridings, level="DistrictName",
+                      errors="ignore")
+            )
+            self.data[year]["gdf_eday_merged"] = (
+                self.data[year]["gdf_eday_merged"]
+                .drop(index=valid_ridings, level="DistrictName",
+                      errors="ignore")
+            )
+            self.data[year]["gdf_advance"] = (
+                self.data[year]["gdf_advance"]
+                .drop(index=valid_ridings, level="DistrictName",
+                      errors="ignore")
+            )
+            self.data[year]["gdf_ridings"] = (
+                self.data[year]["gdf_ridings"]
+                .drop(fed_nums, axis=0, errors="ignore")
+            )
+            # remove loaded flag from the year
+            self.loaded[year].difference_update(valid_ridings)
+
+        # remove the requested ridings from the object
+        self.ridings.difference_update(ridings)
         return self
 
     def _init_year(self, year):
