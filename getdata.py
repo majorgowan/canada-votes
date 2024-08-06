@@ -9,11 +9,12 @@ Email:   mark.fruman@yahoo.com
 import os
 import requests
 from urllib.parse import urljoin
-from .constants import datadir, provcodes
+from .constants import datadir, datasetdir, provcodes, datasets
 from .utils import update_riding_map_file
 
 
-def download_file(fileurl, prefix="", overwrite=False):
+def download_file(fileurl, filename=None, prefix="",
+                  location="data", overwrite=False):
     """
     Download a file in chunks
 
@@ -21,8 +22,12 @@ def download_file(fileurl, prefix="", overwrite=False):
     ----------
     fileurl : str
         address of file to download
+    filename : str
+        local filename under which to save download
     prefix : str
         string to prepend to local filename (e.g. election year)
+    location : str
+        either "datadir" or "datasets"
     overwrite : bool
         if False (default), do not overwrite existing file
 
@@ -31,12 +36,19 @@ def download_file(fileurl, prefix="", overwrite=False):
     str
         local filename
     """
-    # if datadir doesn't exist, create it
-    if not os.path.exists(datadir):
-        os.mkdir(datadir)
+    if location == "data":
+        # if datadir doesn't exist, create it
+        if not os.path.exists(datadir):
+            os.mkdir(datadir)
+        downloaddir = datadir
+    else:
+        # location is "datasets"
+        downloaddir = datasetdir
 
-    filename = fileurl.split("/")[-1]
-    localpath = os.path.join(datadir, f"{prefix}{filename}")
+    if filename is None:
+        filename = fileurl.split("/")[-1]
+
+    localpath = os.path.join(downloaddir, f"{prefix}{filename}")
 
     if not overwrite:
         if os.path.exists(localpath):
@@ -198,3 +210,28 @@ def get_geometries(year=2021, overwrite=False):
         return None
 
     return pdf_result, shape_result
+
+
+def get_dataset(name):
+    """
+    Download dataset from internet
+
+    Parameters
+    ----------
+    name : str
+        name of dataset
+
+    Returns
+    -------
+    str
+    """
+    if name not in datasets:
+        print(f"dataset {name} not defined")
+        return None
+
+    details = datasets.get(name)
+
+    return download_file(fileurl=details["url"],
+                         filename=details["filename"],
+                         location="datasets",
+                         overwrite=False)

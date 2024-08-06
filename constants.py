@@ -10,6 +10,7 @@ import os
 
 basedir = os.path.dirname(__file__)
 datadir = os.path.join(basedir, "data")
+datasetdir = os.path.join(basedir, "datasets")
 outputdir = os.path.join(basedir, "output")
 
 geometry_files = {
@@ -128,9 +129,14 @@ areas = {
         "Waterloo"
     ],
     "london": [
+        "Elgin--Middlesex--London",
+        "Lambton--Kent--Middlesex",
         "London North Centre",
         "London West",
-        "London--Fanshawe"
+        "London--Fanshawe",
+        "Oxford",
+        "Perth--Wellington",
+        "Sarnia--Lambton"
     ],
     "milton": [
         "Burlington",
@@ -277,4 +283,33 @@ areas = {
         "Winnipeg South",
         "Winnipeg South Centre"
     ]
+}
+
+datasets = {
+    "hortons": {
+        "filename": "TimHortons_locations.csv"
+    },
+    "bubble_tea": {
+        "filename": "bubble_tea.csv"
+    },
+    "worship": {
+        "url": ("https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/"
+                + "8e22e693-3394-4dfa-8dc0-eb436db38603/resource/"
+                + "7e36ad86-496c-45a1-87cb-6e7592aa2adc/download/"
+                + "places-of-worship-data-wgs84.zip"),
+        "filename": "places-of-worship-data-wgs84.zip"
+    },
+    "dinesafe": {
+        "url": ("https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/"
+                + "b6b4f3fb-2e2c-47e7-931d-b87d22806948/resource/"
+                + "c0a5f6b0-534a-47c3-867d-d4b5cc84a656/download/"
+                + "Dinesafe%20Historical%20Data.zip"),
+        "filename": "DinesafeHistoricalData.zip"
+    },
+    "sortation": {
+        "url": ("https://www12.statcan.gc.ca/census-recensement/2021/"
+                + "geo/sip-pis/boundary-limites/files-fichiers/"
+                + "lfsa000b21a_e.zip"),
+        "filename": "sortation_areas.zip"
+    }
 }

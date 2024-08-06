@@ -41,7 +41,12 @@ class CanadaVotes:
         if ridings is not None:
             self.ridings = self.ridings.union(ridings)
         if area is not None:
-            self.ridings = self.ridings.union(areas.get(area, []))
+            if area.lower() not in areas:
+                print(f"Area '{area}' not defined. Please select one of:")
+                for area in areas:
+                    print(f"{area}", end="  ")
+            else:
+                self.ridings = self.ridings.union(areas.get(area.lower()))
         return self
 
     def drop_ridings(self, ridings):
