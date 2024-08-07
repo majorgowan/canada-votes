@@ -302,14 +302,13 @@ datasets = {
     "dinesafe": {
         "url": ("https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/"
                 + "b6b4f3fb-2e2c-47e7-931d-b87d22806948/resource/"
-                + "c0a5f6b0-534a-47c3-867d-d4b5cc84a656/download/"
-                + "Dinesafe%20Historical%20Data.zip"),
-        "filename": "DinesafeHistoricalData.zip"
+                + "eda39233-4791-464e-98e6-094f51a01916/download/"
+                + "Dinesafe.csv"),
+        "filename": "Dinesafe.csv"
     },
     "sortation": {
-        "url": ("https://www12.statcan.gc.ca/census-recensement/2021/"
-                + "geo/sip-pis/boundary-limites/files-fichiers/"
-                + "lfsa000b21a_e.zip"),
+        "url": ("https://www12.statcan.gc.ca/census-recensement/2011/"
+                + "geo/bound-limit/files-fichiers/2016/lfsa000b16a_e.zip"),
         "filename": "sortation_areas.zip"
     }
 }

@@ -200,12 +200,13 @@ class CanadaVotes:
         else:
             gdf_plot = self.data[year]["gdf_eday_merged"]
 
-        viz.votes_plot(gdf_plot, party=party, gdf_ridings=gdf_ridings,
-                       plot_variable=plot_variable, figsize=figsize,
-                       ridings_args=ridings_args, basemap=basemap,
-                       year=year, **kwargs)
+        ax = viz.votes_plot(gdf_plot, party=party, gdf_ridings=gdf_ridings,
+                            plot_variable=plot_variable, figsize=figsize,
+                            ridings_args=ridings_args, basemap=basemap,
+                            year=year, **kwargs)
         if filename is not None:
             viz.savepng(filename)
+        return ax
 
     def plot_compare(self, party1=None, party2=None, year=None,
                      plot_variable="VoteFraction",
@@ -224,13 +225,15 @@ class CanadaVotes:
         else:
             gdf_plot = self.data[year]["gdf_eday_merged"]
 
-        viz.votes_comparison_plot(gdf_plot, party1=party1, party2=party2,
-                                  gdf_ridings=gdf_ridings,
-                                  plot_variable=plot_variable,
-                                  figsize=figsize, ridings_args=ridings_args,
-                                  basemap=basemap, year=year, **kwargs)
+        ax = viz.votes_comparison_plot(gdf_plot, party1=party1, party2=party2,
+                                       gdf_ridings=gdf_ridings,
+                                       plot_variable=plot_variable,
+                                       figsize=figsize,
+                                       ridings_args=ridings_args,
+                                       basemap=basemap, year=year, **kwargs)
         if filename is not None:
             viz.savepng(filename)
+        return ax
 
     def parties(self, year):
         """
