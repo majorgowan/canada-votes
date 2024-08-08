@@ -271,3 +271,57 @@ def query_ridings(pattern, year=2021):
     matches = [rid for rid in ridings_map
                if re.match(pattern, rid)]
     return matches
+
+
+def party_difference(gdf_vote, plot_variable, party1, party2):
+    """
+    Given a GeoDataFrame with multiindex including "Party", return
+    single-party frame with "Difference" column representing the difference
+    between the two parties in terms of specified plot variable
+
+    Parameters
+    ----------
+    gdf_vote : GeoDataFrame
+        with data for plot_variable and two parties
+    plot_variable : str
+        name of column to compare
+    party1 : str
+        name of first party to compare
+    party2 : str
+        name of second party to compare
+
+    Returns
+    -------
+    GeoDataFrame
+        including "Difference" column
+    """
+
+    # select the subsets for the two parties
+    gdf1 = (gdf_vote
+            .xs(level="Party", key=party1)
+            .copy())
+
+    gdf2 = (gdf_vote
+            .xs(level="Party", key=party2)
+            .copy())
+
+    # check if indexes of the two party tables match (it won't if one
+    # or the other party is not represented in some locations, in which case
+    # the subtraction of the plot_variable will fail)
+    if not gdf1.index.equals(gdf2.index):
+        # compute a common index and apply it to each frame
+        index_union = gdf1.index.union(gdf2.index)
+        gdf1 = gdf1.reindex(index_union)
+        gdf2 = gdf2.reindex(index_union)
+
+        # fill the missing values of the plot_variable column with zeros
+        gdf1[plot_variable] = gdf1[plot_variable].fillna(0)
+        gdf2[plot_variable] = gdf2[plot_variable].fillna(0)
+
+        # fill the missing geometries with the values from the other party
+        gdf1["geometry"] = gdf1["geometry"].fillna(gdf2["geometry"])
+
+    # cmopute the difference and Bob should be your uncle
+    gdf1["Difference"] = gdf1[plot_variable] - gdf2[plot_variable]
+
+    return gdf1

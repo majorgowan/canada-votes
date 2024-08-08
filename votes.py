@@ -15,8 +15,6 @@ from .utils import (get_int_part, area_to_ridings, apply_riding_map,
                     validate_ridings)
 
 
-# TODO: allow handling parties with no votes in a poll to not break everything
-
 def load_vote_data_prov(year, province, ridings=None):
     """
     Load dataframe with vote results from single province
@@ -235,6 +233,11 @@ def add_eday_votes(gdf_eday, gdf_advance):
         .divide((gdf_advance["TotalVotes"]
                  + gdf_advance["TotalElectionDayVotes"]))
     )
+
+    # compute advance vote fraction (if not already computed)
+    if "VoteFraction" not in gdf_advance.columns:
+        gdf_advance["VoteFraction"] = (gdf_advance["Votes"]
+                                       .divide(gdf_advance["TotalVotes"]))
 
     gdf_advance = gdf_advance.set_index(["DistrictName",
                                          "Party",

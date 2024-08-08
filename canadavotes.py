@@ -8,8 +8,8 @@ Email:   mark.fruman@yahoo.com
 """
 import pandas as pd
 import geopandas as gpd
-from .utils import validate_ridings, apply_riding_map
 from .constants import areas
+from .utils import validate_ridings, apply_riding_map
 from . import votes, geometry, viz
 
 
@@ -185,7 +185,7 @@ class CanadaVotes:
         return self
 
     def plot_votes(self, party, year=None, plot_variable="VoteFraction",
-                   figsize=None, ridings_args=None, basemap=None,
+                   figwidth=None, ridings_args=None, basemap=None,
                    advance=False, filename=None, **kwargs):
         if len(self.data) == 0:
             print("please load some data first")
@@ -201,7 +201,7 @@ class CanadaVotes:
             gdf_plot = self.data[year]["gdf_eday_merged"]
 
         ax = viz.votes_plot(gdf_plot, party=party, gdf_ridings=gdf_ridings,
-                            plot_variable=plot_variable, figsize=figsize,
+                            plot_variable=plot_variable, figwidth=figwidth,
                             ridings_args=ridings_args, basemap=basemap,
                             year=year, **kwargs)
         if filename is not None:
@@ -210,7 +210,7 @@ class CanadaVotes:
 
     def plot_compare(self, party1=None, party2=None, year=None,
                      plot_variable="VoteFraction",
-                     figsize=None, ridings_args=None, basemap=None,
+                     figwidth=None, ridings_args=None, basemap=None,
                      advance=False, filename=None, **kwargs):
         if len(self.data) == 0:
             print("please load some data first")
@@ -228,7 +228,7 @@ class CanadaVotes:
         ax = viz.votes_comparison_plot(gdf_plot, party1=party1, party2=party2,
                                        gdf_ridings=gdf_ridings,
                                        plot_variable=plot_variable,
-                                       figsize=figsize,
+                                       figwidth=figwidth,
                                        ridings_args=ridings_args,
                                        basemap=basemap, year=year, **kwargs)
         if filename is not None:
