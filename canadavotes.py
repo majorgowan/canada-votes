@@ -8,8 +8,8 @@ Email:   mark.fruman@yahoo.com
 """
 import pandas as pd
 import geopandas as gpd
-from .utils import validate_ridings, apply_riding_map
 from .constants import areas
+from .utils import validate_ridings, apply_riding_map
 from . import votes, geometry, viz
 
 
@@ -41,7 +41,12 @@ class CanadaVotes:
         if ridings is not None:
             self.ridings = self.ridings.union(ridings)
         if area is not None:
-            self.ridings = self.ridings.union(areas.get(area, []))
+            if area.lower() not in areas:
+                print(f"Area '{area}' not defined. Please select one of:")
+                for area in areas:
+                    print(f"{area}", end="  ")
+            else:
+                self.ridings = self.ridings.union(areas.get(area.lower()))
         return self
 
     def drop_ridings(self, ridings):
@@ -180,8 +185,8 @@ class CanadaVotes:
         return self
 
     def plot_votes(self, party, year=None, plot_variable="VoteFraction",
-                   figsize=None, ridings_args=None, basemap=None,
-                   advance=False, filename=None, **kwargs):
+                   ridings_args=None, basemap=None, advance=False,
+                   filename=None, **kwargs):
         if len(self.data) == 0:
             print("please load some data first")
             return None
@@ -195,17 +200,17 @@ class CanadaVotes:
         else:
             gdf_plot = self.data[year]["gdf_eday_merged"]
 
-        viz.votes_plot(gdf_plot, party=party, gdf_ridings=gdf_ridings,
-                       plot_variable=plot_variable, figsize=figsize,
-                       ridings_args=ridings_args, basemap=basemap,
-                       year=year, **kwargs)
+        ax = viz.votes_plot(gdf_plot, party=party, gdf_ridings=gdf_ridings,
+                            plot_variable=plot_variable,
+                            ridings_args=ridings_args, basemap=basemap,
+                            year=year, **kwargs)
         if filename is not None:
             viz.savepng(filename)
+        return ax
 
     def plot_compare(self, party1=None, party2=None, year=None,
-                     plot_variable="VoteFraction",
-                     figsize=None, ridings_args=None, basemap=None,
-                     advance=False, filename=None, **kwargs):
+                     plot_variable="VoteFraction", ridings_args=None,
+                     basemap=None, advance=False, filename=None, **kwargs):
         if len(self.data) == 0:
             print("please load some data first")
             return None
@@ -219,13 +224,41 @@ class CanadaVotes:
         else:
             gdf_plot = self.data[year]["gdf_eday_merged"]
 
-        viz.votes_comparison_plot(gdf_plot, party1=party1, party2=party2,
-                                  gdf_ridings=gdf_ridings,
-                                  plot_variable=plot_variable,
-                                  figsize=figsize, ridings_args=ridings_args,
-                                  basemap=basemap, year=year, **kwargs)
+        ax = viz.votes_comparison_plot(gdf_plot, party1=party1, party2=party2,
+                                       gdf_ridings=gdf_ridings,
+                                       plot_variable=plot_variable,
+                                       ridings_args=ridings_args,
+                                       basemap=basemap, year=year, **kwargs)
         if filename is not None:
             viz.savepng(filename)
+        return ax
+
+    def plot_multiyear(self, comparison=False, party=None, party1=None,
+                       party2=None, years=None,
+                       plot_variable="VoteFraction",
+                       ridings_args=None, basemap=None,
+                       advance=False, filename=None, **kwargs):
+        if len(self.data) == 0:
+            print("please load some data first")
+            return None
+
+        if years is None:
+            years = self.years[-4:]
+
+        if advance:
+            gdf_vote_name = "gdf_advance"
+        else:
+            gdf_vote_name = "gdf_eday_merged"
+
+        fig = viz.multiyear_plot(self, years=years, gdf_vote_name=gdf_vote_name,
+                                 party=party, party1=party1, party2=party2,
+                                 plot_variable=plot_variable,
+                                 comparison=comparison,
+                                 ridings_args=ridings_args,
+                                 basemap=basemap, **kwargs)
+        if filename is not None:
+            viz.savepng(filename)
+        return fig
 
     def parties(self, year):
         """

@@ -7,10 +7,10 @@ Email:   mark.fruman@yahoo.com
 -------------------------------------------------------
 """
 import os
+import contextily as cx
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-import contextily as cx
-from .utils import get_inv_riding_map
+from .utils import get_inv_riding_map, party_difference
 from .votes import compute_vote_fraction
 from .constants import partycolours, outputdir
 
@@ -83,8 +83,8 @@ def ridings_plot(gdf_ridings, year=2021, labels=False, title=None, **kwargs):
     if labels:
         # add labels at centroids
         for number, row in gdf_ridings.iterrows():
-            plt.text(row["centroid"].x, row["centroid"].y,
-                     inv_riding_map[number], ha="center", wrap=True)
+            axobj.text(row["centroid"].x, row["centroid"].y,
+                       inv_riding_map[number], ha="center", wrap=True)
 
     if title is not None:
         plt.title(title)
@@ -93,8 +93,8 @@ def ridings_plot(gdf_ridings, year=2021, labels=False, title=None, **kwargs):
 
 
 def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
-               figsize=None, ridings_args=None, basemap=None, year=2021,
-               **kwargs):
+               figwidth=None, ax=None, ridings_args=None, basemap=None,
+               year=2021, **kwargs):
     """
     visualize votes for single party by polling station
 
@@ -109,8 +109,10 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
     plot_variable : str
         one of "VoteFraction", "Votes", "AllVoteFraction",
                "PotentialVoteFraction"
-    figsize : tuple
-        size of figure
+    figwidth : float
+        width of figure
+    ax : matplotlib.Axes object
+        existing Axes into which to plot figure
     ridings_args : dict
         parameters for ridings_plot
     basemap : str
@@ -124,10 +126,17 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
     -------
     matplotlib.pyplot.Axes
     """
-    if figsize is None:
-        figsize = (10, 8)
+    if ax is None:
+        if figwidth is None:
+            figwidth = 12
 
-    plt.figure(figsize=figsize)
+        total_bounds = gdf_vote.total_bounds
+        aspect = ((total_bounds[3] - total_bounds[1])
+                  / (total_bounds[2] - total_bounds[0]))
+        figheight = aspect * figwidth
+
+        fig = plt.figure(figsize=(figwidth, figheight))
+        ax = fig.gca()
 
     if plot_variable not in gdf_vote.columns:
         if plot_variable == "VoteFraction":
@@ -151,10 +160,11 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
     ax = (gdf_vote
           .reset_index("DistrictName")
           .loc[party]
-          .plot(column=plot_variable, legend=True, ax=plt.gca(),
+          .plot(column=plot_variable, legend=True, ax=ax,
                 cmap=cmap, **kwargs))
 
     if gdf_ridings is not None:
+
         if ridings_args is None:
             ridings_args = {}
         ridings_args0 = {"color": "None",
@@ -185,12 +195,12 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
 
 # noinspection PyTypeChecker
 def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
-                          plot_variable="VoteFraction", figsize=None,
-                          ridings_args=None, basemap=None, year=2021,
-                          **kwargs):
+                          plot_variable="VoteFraction", figwidth=None,
+                          ax=None, ridings_args=None, basemap=None, year=2021,
+                          crange_max=None, **kwargs):
     """
     visualize votes difference between two parties.  If one or both parties
-    not specified, remaining party or parties with highest vote share used.
+    not specified, remaining party or parties with the highest vote share used.
 
     Parameters
     ----------
@@ -205,14 +215,18 @@ def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
     plot_variable : str
         one of "VoteFraction", "Votes", "AllVoteFraction",
                "PotentialVoteFraction"
-    figsize : tuple
-        size of figure
+    figwidth : float
+        width of figure
+    ax : matplotlib.Axes object
+        existing Axes into which to plot figure
     ridings_args : dict
         parameters for ridings_plot
     basemap : str
         one of "Positron", "Voyager", "Mapnik"
     year : int
         election year
+    crange_max : float
+        value of plot_variable to correspond to maximum of colour scale
     kwargs
         keyword arguments to GeoDataFrame.plot()
 
@@ -220,16 +234,23 @@ def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
     -------
     matplotlib.pyplot.Axes
     """
-    if figsize is None:
-        figsize = (10, 8)
+    if ax is None:
+        if figwidth is None:
+            figwidth = 12
 
-    plt.figure(figsize=figsize)
+        total_bounds = gdf_vote.total_bounds
+        aspect = ((total_bounds[3] - total_bounds[1])
+                  / (total_bounds[2] - total_bounds[0]))
+        figheight = aspect * figwidth
+
+        fig = plt.figure(figsize=(figwidth, figheight))
+        ax = fig.gca()
 
     if plot_variable not in gdf_vote.columns:
         print(f"{plot_variable} not in dataframe")
         return
 
-    # if parties not specified, use parties with highest total vote share
+    # if parties not specified, use parties with the highest total vote share
     if party1 is None or party2 is None:
         df_party_votes = (gdf_vote
                           .reset_index()
@@ -250,33 +271,10 @@ def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
         else:
             party2 = party_a
 
-    # select the subsets for the two parties
-    gdf1 = (gdf_vote
-            .xs(level="Party", key=party1)
-            .copy())
-
-    gdf2 = (gdf_vote
-            .xs(level="Party", key=party2)
-            .copy())
-
-    # check if indexes of the two party tables match (it won't if one
-    # or the other party is not represented in some locations, in which case
-    # the subtraction of the plot_variable will fail)
-    if not gdf1.index.equals(gdf2.index):
-        # compute a common index and apply it to each frame
-        index_union = gdf1.index.union(gdf2.index)
-        gdf1 = gdf1.reindex(index_union)
-        gdf2 = gdf2.reindex(index_union)
-
-        # fill the missing values of the plot_variable column with zeros
-        gdf1[plot_variable] = gdf1[plot_variable].fillna(0)
-        gdf2[plot_variable] = gdf2[plot_variable].fillna(0)
-
-        # fill the missing geometries with the values from the other party
-        gdf1["geometry"] = gdf1["geometry"].fillna(gdf2["geometry"])
-
-    # cmopute the difference and Bob should be your uncle
-    gdf1["Difference"] = gdf1[plot_variable] - gdf2[plot_variable]
+    # select part of gdf_vote for party1 with extra column for difference
+    # to party2
+    gdf1 = party_difference(gdf_vote=gdf_vote, plot_variable=plot_variable,
+                            party1=party1, party2=party2)
 
     colour1 = partycolours.get(party1, "lightcoral")
     colour2 = partycolours.get(party2, "cadetblue")
@@ -285,18 +283,20 @@ def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
                               colors=[colour2, "white", colour1],
                               N=256))
 
-    crange_max = gdf1["Difference"].abs().max()
+    if crange_max is None:
+        crange_max = gdf1["Difference"].abs().max()
 
     if basemap is not None:
         # add some transparency so the basemap shows through
         kwargs["alpha"] = 0.7
 
     ax = (gdf1
-          .plot(column="Difference", legend=True, ax=plt.gca(),
+          .plot(column="Difference", legend=True,
                 vmin=-1 * crange_max, vmax=crange_max,
-                cmap=custom_cmap, **kwargs))
+                cmap=custom_cmap, ax=ax, **kwargs))
 
     if gdf_ridings is not None:
+
         if ridings_args is None:
             ridings_args = {}
         ridings_args0 = {"color": "None",
@@ -336,3 +336,116 @@ def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
                        source=provider)
 
     return ax
+
+
+# noinspection PyTypeChecker
+def multiyear_plot(canadavotes, years, gdf_vote_name, party=None,
+                   party1=None, party2=None, comparison=False,
+                   plot_variable="VoteFraction", figwidth=12,
+                   ridings_args=None, basemap=None, **kwargs):
+    """
+    multi-panel plot of votes or vote comparison over multiple elections
+
+    Parameters
+    ----------
+    canadavotes : CanadaVotes
+        loaded CanadaVotes object
+    years : list
+        election years to compare
+    gdf_vote_name : str
+        name of GeoDataFrame to use for plots
+    party : str
+        name of party for simple plot
+    party1 : str
+        name of first party for comparison plot
+    party2 : str
+        name of second party for comparison plot
+    comparison : bool
+        if True, supply party1 and party2 for comparison plot
+    plot_variable : str
+        one of "VoteFraction", "Votes", "AllVoteFraction",
+               "PotentialVoteFraction"
+    figwidth : float
+        width of entire figure
+    ridings_args : dict
+        parameters for ridings_plot
+    basemap : str
+        one of "Positron", "Voyager", "Mapnik"
+    kwargs
+        keyword arguments to GeoDataFrame.plot()
+
+    Returns
+    -------
+    matplotlib.pyplot.Axes
+    """
+    # get total longitude and latitude ranges
+    total_bounds = canadavotes[years[0]]["gdf_advance"].total_bounds
+    aspect = ((total_bounds[3] - total_bounds[1])
+              / (total_bounds[2] - total_bounds[0]))
+
+    if len(years) <= 3:
+        nrows = 1
+        ncols = len(years)
+    elif len(years) == 4:
+        nrows = 2
+        ncols = 2
+    else:
+        nrows = 2
+        ncols = 3
+
+    figheight = nrows * aspect * figwidth / ncols
+
+    # the following is to determine a common range of volues for
+    # all plots based on ranges for all years
+    min_val = 1e9
+    max_val = -1e9
+    if comparison:
+        for year in years:
+            gdf_vote = canadavotes[year][gdf_vote_name]
+            gdf1 = party_difference(gdf_vote, plot_variable,
+                                    party1, party2)
+            max_val = max(gdf1["Difference"].abs().max(), max_val)
+    else:
+        for year in years:
+            gdf_vote = canadavotes[year][gdf_vote_name]
+            min_val = min(gdf_vote[plot_variable].min(), min_val)
+            max_val = max(gdf_vote[plot_variable].max(), max_val)
+
+    fig, axs = plt.subplots(nrows=nrows, ncols=ncols,
+                            figsize=(figwidth, figheight))
+
+    # if only one row, make it a list to simplify below
+    if nrows == 1:
+        axs = [axs]
+
+    row = 0
+    col = 0
+    for year in years:
+        if col == ncols:
+            col = 0
+            row += 1
+
+        if comparison:
+            votes_comparison_plot(gdf_vote=canadavotes[year][gdf_vote_name],
+                                  party1=party1, party2=party2,
+                                  gdf_ridings=canadavotes[year]["gdf_ridings"],
+                                  plot_variable=plot_variable,
+                                  ax=axs[row][col],
+                                  ridings_args=ridings_args, basemap=basemap,
+                                  year=year, crange_max=max_val,
+                                  **kwargs)
+        else:
+            votes_plot(gdf_vote=canadavotes[year][gdf_vote_name],
+                       party=party,
+                       gdf_ridings=canadavotes[year]["gdf_ridings"],
+                       plot_variable=plot_variable,
+                       ax=axs[row][col],
+                       ridings_args=ridings_args, basemap=basemap,
+                       year=year, vmin=min_val, vmax=max_val,
+                       **kwargs)
+
+        axs[row][col].set_title(f"{year}", fontsize=14)
+
+        col += 1
+
+    return fig
