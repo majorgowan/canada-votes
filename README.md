@@ -24,7 +24,7 @@ cdv.generate_provincial_geometries(year=2021)
 import canadavotes as cdv
 
 # instantiate a CanadaVotes object with a list of ridings or predefined area
-toronto = cdv.CanadaVotes(area="downtown_toronto", years=[2019, 2021])
+toronto = cdv.CanadaVotes(area="downtown_toronto", years=[2015, 2019, 2021])
 
 # some predefined areas:
 #   "downtown_toronto", "north_toronto",
@@ -40,14 +40,20 @@ toronto
 
 ```output
 CanadaVotes object
-Years: 2019 2021
+Years: 2015 2019 2021
 Ridings:
-	Davenport
+	University--Rosedale
 	Spadina--Fort York
 	Toronto Centre
-	Toronto--Danforth
+	Davenport
 	Toronto--St. Paul's
-	University--Rosedale
+	Toronto--Danforth
+Election 2015 parties:
+	not loaded
+Election 2019 parties:
+	not loaded
+Election 2021 parties:
+	not loaded
 ```
 
 ```python
@@ -55,18 +61,31 @@ Ridings:
 toronto.load()
 ```
 ```output
+Loading year 2015 . . . loaded.
 Loading year 2019 . . . loaded.
 Loading year 2021 . . . loaded.
-
 CanadaVotes object
-Years: 2019 2021
+Years: 2015 2019 2021
 Ridings:
-	Davenport
+	University--Rosedale
 	Spadina--Fort York
 	Toronto Centre
-	Toronto--Danforth
+	Davenport
 	Toronto--St. Paul's
-	University--Rosedale
+	Toronto--Danforth
+Election 2015 parties:
+	Animal Alliance/Environment Voters
+	Communist
+	Conservative
+	Green Party
+	Independent
+	Liberal
+	Libertarian
+	Marxist-Leninist
+	NDP-New Democratic Party
+	PACT
+	PC Party
+	The Bridge
 Election 2019 parties:
 	Animal Protection Party
 	Communist
@@ -91,7 +110,7 @@ Election 2021 parties:
 ```
 
 ```python
-# add riding and load again (i.e. update data)
+# add a riding and load again (i.e. update data)
 toronto.add_riding("Toronto--St. Paul's").load()
 ```
 
@@ -180,6 +199,16 @@ toronto.plot_votes(party="People's Party - PPC", advance=False,
                    basemap="Mapnik", figsize=(12, 6))
 ```
 ![downtown toronto e-day PPC Mapnik](images/downtown_eday_PPC_with_Mapnik.png)
+
+#### Compare results over multiple elections
+```python
+# compare results over three elections
+toronto.plot_multiyear(comparison=True, years=[2015, 2019, 2021],
+                       party1="Liberal", party2="NDP-New Democratic Party", 
+                       advance=True, plot_variable="AllVoteFraction",
+                       figwidth=19, ridings_args={"labels": False})
+```
+![downtown_toronto_Lib_vs_NDP_multiyear](images/downtown_allvotes_Lib_v_NDP_multiyear.png)
 
 #### Find ridings by proximity
 ```python

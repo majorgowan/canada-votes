@@ -310,14 +310,14 @@ def votes_comparison_plot(gdf_vote, party1=None, party2=None, gdf_ridings=None,
     cbar = plt.gcf().axes[-1]
     cbar.text(-0.35, 1.03, s=party1.split(" ")[0].split("-")[0],
               ha='left', va='center',
-              size=14, color=colour1,
+              size=12, color=colour1,
               transform=cbar.transAxes)
     cbar.text(-0.35, -0.03, s=party2.split(" ")[0].split("-")[0],
               ha='left', va='center',
-              size=14, color=colour2,
+              size=12, color=colour2,
               transform=cbar.transAxes)
     cbar.set_title(plot_variable, y=0.5, x=3.3, va="center",
-                   size=14, rotation=-90)
+                   size=12, rotation=-90)
 
     if basemap is not None:
 
@@ -443,6 +443,11 @@ def multiyear_plot(canadavotes, years, gdf_vote_name, party=None,
                        ridings_args=ridings_args, basemap=basemap,
                        year=year, vmin=min_val, vmax=max_val,
                        **kwargs)
+
+        # rotate x-tick labels
+        xticks = axs[row][col].get_xticks()
+        axs[row][col].set_xticks(xticks)
+        axs[row][col].set_xticklabels(xticks, rotation=30, ha="right")
 
         axs[row][col].set_title(f"{year}", fontsize=14)
 
