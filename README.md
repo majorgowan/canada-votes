@@ -196,7 +196,7 @@ toronto.plot_compare(party1="Liberal", party2="NDP-New Democratic Party", year=2
 # People's Party vote share with a Mapnik background
 toronto.plot_votes(party="People's Party - PPC", advance=False,
                    plot_variable="VoteFraction", year=2021,
-                   basemap="Mapnik", figsize=(12, 6))
+                   basemap="Mapnik", figwidth=12)
 ```
 ![downtown toronto e-day PPC Mapnik](images/downtown_eday_PPC_with_Mapnik.png)
 
@@ -247,7 +247,7 @@ Election 2021 parties:
 # plot Green Party vs. NDP share over "Voyager" basemap
 victoria.plot_compare(party1="Green Party", party2="NDP-New Democratic Party", year=2021,
                       advance=True, plot_variable="AllVoteFraction", basemap="Voyager",
-                      figsize=(20,8))
+                      figwidth=14)
 ```
 ![victoria_proximity Green v NDP Voyager](images/victoria_allvotefrac_Green_v_NDP_with_Voyager.png)
 

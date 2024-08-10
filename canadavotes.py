@@ -39,6 +39,8 @@ class CanadaVotes:
 
     def add_ridings(self, ridings=None, area=None):
         if ridings is not None:
+            if isinstance(ridings, str):
+                ridings = [ridings]
             self.ridings = self.ridings.union(ridings)
         if area is not None:
             if area.lower() not in areas:
@@ -50,6 +52,8 @@ class CanadaVotes:
         return self
 
     def drop_ridings(self, ridings):
+        if isinstance(ridings, str):
+            ridings = [ridings]
         for year in self.years:
             # remove the requested ridings from each data table
             valid_ridings = validate_ridings(ridings)
