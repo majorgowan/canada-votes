@@ -127,6 +127,34 @@ def load_vote_data_prov(year, province, ridings=None):
                    .rename(columns={"Votes": "TotalVotes"}))
     df = df.merge(df_totvotes, on=["DistrictName", "Poll"], how="left")
 
+    # distinguish value in Party column where multiple Independent candidates
+    # appear in same riding (N.B. sometimes it's called "No Affiliation")
+    df.loc[df["Party"] == "No Affiliation", "Party"] = "Independent"
+    df_indep_cands = (df[df["Party"] == "Independent"]
+                      .get(["DistrictNumber", "CandidateFirstName",
+                            "CandidateLastName"])
+                      .drop_duplicates())
+    cand_rename_map = {}
+    for district_number, grp in df_indep_cands.groupby("DistrictNumber"):
+        ind_counter = 0
+        grp_unique = grp[["CandidateFirstName",
+                          "CandidateLastName"]].drop_duplicates()
+        if len(grp_unique) > 1:
+            for irow, row in grp_unique.iterrows():
+                ind_counter += 1
+                cand_rename_map[
+                    (row["CandidateFirstName"],
+                     row["CandidateLastName"])
+                ] = f"Independent-{ind_counter:02d}"
+    for cand_names, party_str in cand_rename_map.items():
+        df.loc[(df["CandidateFirstName"] == cand_names[0])
+               & (df["CandidateLastName"] == cand_names[1]),
+               "Party"] = party_str
+
+    # rename "People's Party" to "People's Party - PPC" for consistency over
+    # multiple elections
+    df.loc[df["Party"] == "People's Party", "Party"] = "People's Party - PPC"
+
     # create a column with the numeric part of the poll number for merging
     # with the GeoDataFrames
     df["PD_NUM"] = df["Poll"].map(get_int_part).astype("int")
@@ -136,6 +164,8 @@ def load_vote_data_prov(year, province, ridings=None):
 
 def load_vote_data(ridings=None, area=None, year=2021):
     """
+    Load dataframe with vote results from list of ridings (possibly
+    spanning multiple provinces)
 
     Parameters
     ----------
