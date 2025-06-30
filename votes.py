@@ -116,9 +116,6 @@ def load_vote_data_prov(year, province, ridings=None):
     # for some reason, DistrictName ends with " in 2008
     df["DistrictName"] = df["DistrictName"].str.strip("\"")
 
-    # drop rows not associated with a polling station ("Special Voting Rules")
-    df = df[~df["Poll"].str.contains("S/R")]
-
     # create column with the total number of votes for all parties at that poll
     df_totvotes = (df
                    .get(["DistrictName", "Poll", "Votes"])
@@ -156,8 +153,10 @@ def load_vote_data_prov(year, province, ridings=None):
     df.loc[df["Party"] == "People's Party", "Party"] = "People's Party - PPC"
 
     # create a column with the numeric part of the poll number for merging
-    # with the GeoDataFrames
-    df["PD_NUM"] = df["Poll"].map(get_int_part).astype("int")
+    # with the GeoDataFrames (exclude entirely non-numeric "Special Rules"
+    # polls, i.e. vote by mail etc.)
+    df["PD_NUM"] = (df.loc[~df["Poll"].str.contains("S/R"), "Poll"]
+                    .map(get_int_part).astype("int"))
 
     return df
 
