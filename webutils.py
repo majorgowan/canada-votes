@@ -38,13 +38,6 @@ def write_leaflet_data(cdvobj, year, filename):
                    .rename(columns={"Votes": "AdvanceVotes"})
                    .reset_index().copy())
 
-    # deduplicate Party column for independent candidates
-    mask = gdf_advance[gdf_advance["Party"] == "Independent"].index
-    gdf_advance.loc[mask, "Party"] = (
-            "Independent_" + gdf_advance.loc[mask, "CandidateLastName"]
-            + "_" + gdf_advance.loc[mask, "CandidateFirstName"]
-    )
-
     # create json map from riding to party to condidates
     candidate_map = {}
     candidate_df = (gdf_advance[["FED_NUM", "Party",
@@ -59,6 +52,18 @@ def write_leaflet_data(cdvobj, year, filename):
                     candidate_row["CandidateFirstName"] + " "
                     + candidate_row["CandidateLastName"]
             )
+
+    # make map from riding to party to special votes
+    vdf = cdvobj.data[year]["vdf"].copy()
+    special_dict = (vdf[vdf["Poll"].str.startswith(" S")]
+                    .get(["DistrictNumber", "Party", "Votes"])
+                    .groupby(["DistrictNumber", "Party"])
+                    .sum()
+                    .to_dict()["Votes"])
+    special_map = {fednum: {party: special_dict[(fn, party)]
+                            for (fn, party) in special_dict
+                            if fn == fednum}
+                   for fednum in vdf["DistrictNumber"].unique()}
 
     # make "pivoted" frames with columns for each candidate in each riding
     pivoted_advance_gdfs = {}
@@ -108,7 +113,8 @@ def write_leaflet_data(cdvobj, year, filename):
                     }
         leaflet_data["polldata"][str(fed_num)] = {
             "votes": riding_dict,
-            "candidates": candidate_map[fed_num]
+            "candidates": candidate_map[fed_num],
+            "special_votes": special_map[fed_num]
         }
 
     # separate boundaries and centroids from ridings frame
