@@ -71,6 +71,38 @@ def load_geometries(ridings=None, area=None, year=2021, advance=False):
 
     gdf = gdf[gdf["FED_NUM"].isin(riding_codes)]
 
+    # some poll areas have multiple rows (when they consist of
+    # multiple disjoint parts) ... do a robust dissolve on those
+    # N.B. keep the first row of the other columns, noting the
+    # other GIS columns will no longer be correct (but we don't use them)
+    pd_num_col = "ADV_POLL_N" if advance else "PD_NUM"
+
+    # find polls with multiple rows
+    multirow_polls = (gdf.loc[gdf[["FED_NUM", pd_num_col]].duplicated(),
+                              ["FED_NUM", pd_num_col]]
+                      .drop_duplicates()
+                      .apply(lambda row: tuple(row.values), axis=1))
+    gdf_multirow = (gdf
+                    .set_index(["FED_NUM", pd_num_col])
+                    .loc[multirow_polls]
+                    .reset_index())
+    # dissolve geometries of rows with same (FED_NUM, PD_NUM)
+    gdf_multirow = robust_dissolve(gdf_multirow,
+                                   by=["FED_NUM", pd_num_col],
+                                   aggfunc={ccol: (lambda col: col.iloc[0])
+                                            for ccol in gdf_multirow.columns
+                                            if ccol not in ("geometry",
+                                                            "FED_NUM",
+                                                            pd_num_col)})
+    # drop the rows from the original dataframe
+    gdf = (gdf
+           .set_index(["FED_NUM", pd_num_col])
+           .drop(gdf_multirow.index))
+    # append the dissolved dataframe
+    gdf = (pd.concat((gdf, gdf_multirow))
+           .sort_index()
+           .reset_index())
+
     # change poll number and advance poll number to integer type
     if "PD_NUM" in gdf.columns:
         gdf["PD_NUM"] = gdf["PD_NUM"].astype("int64")
