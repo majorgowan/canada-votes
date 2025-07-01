@@ -13,7 +13,8 @@ import geopandas as gpd
 from math import cos, pi
 from zipfile import ZipFile
 from shapely.errors import GEOSException
-from shapely import MultiPolygon, unary_union, coverage_union_all, simplify
+from shapely import (MultiPolygon, Polygon, unary_union, coverage_union_all,
+                     simplify)
 from .votes import compute_vote_fraction
 from .constants import codeprovs, datadir, areas, geometry_files, provcodes
 from .utils import (provs_from_ridings, validate_ridings, apply_riding_map,
@@ -70,6 +71,38 @@ def load_geometries(ridings=None, area=None, year=2021, advance=False):
         gdf = pd.concat((gdf, gdf0), ignore_index=True)
 
     gdf = gdf[gdf["FED_NUM"].isin(riding_codes)]
+
+    # some poll areas have multiple rows (when they consist of
+    # multiple disjoint parts) ... do a robust dissolve on those
+    # N.B. keep the first row of the other columns, noting the
+    # other GIS columns will no longer be correct (but we don't use them)
+    pd_num_col = "ADV_POLL_N" if advance else "PD_NUM"
+
+    # find polls with multiple rows
+    multirow_polls = (gdf.loc[gdf[["FED_NUM", pd_num_col]].duplicated(),
+                              ["FED_NUM", pd_num_col]]
+                      .drop_duplicates()
+                      .apply(lambda row: tuple(row.values), axis=1))
+    gdf_multirow = (gdf
+                    .set_index(["FED_NUM", pd_num_col])
+                    .loc[multirow_polls]
+                    .reset_index())
+    # dissolve geometries of rows with same (FED_NUM, PD_NUM)
+    gdf_multirow = robust_dissolve(gdf_multirow,
+                                   by=["FED_NUM", pd_num_col],
+                                   aggfunc={ccol: (lambda col: col.iloc[0])
+                                            for ccol in gdf_multirow.columns
+                                            if ccol not in ("geometry",
+                                                            "FED_NUM",
+                                                            pd_num_col)})
+    # drop the rows from the original dataframe
+    gdf = (gdf
+           .set_index(["FED_NUM", pd_num_col])
+           .drop(gdf_multirow.index))
+    # append the dissolved dataframe
+    gdf = (pd.concat((gdf, gdf_multirow))
+           .sort_index()
+           .reset_index())
 
     # change poll number and advance poll number to integer type
     if "PD_NUM" in gdf.columns:
@@ -328,27 +361,47 @@ def generate_provincial_geometries(year=2021):
         return None
 
     eday_file = filedata["filename"]
-    layer = filedata["layer"]
+    layers = filedata["layers"]
 
     if not os.path.exists(os.path.join(datadir, eday_file)):
         print(f"please download shape file {eday_file} with get_geometries()")
         return
 
     # load GeoDataFrame
-    gdf = gpd.read_file(os.path.join(datadir, eday_file),
-                        layer=layer, encoding="latin1")
+    if layers is not None:
+        gdf_areas = gpd.read_file(os.path.join(datadir, eday_file),
+                                  layer=layers["areas"],
+                                  encoding="latin1")
+        gdf_points = gpd.read_file(os.path.join(datadir, eday_file),
+                                   layer=layers["points"],
+                                   encoding="latin1")
+        # set PD type to T ("triangle")
+        gdf_points["PD_TYPE"] = "T"
+        # convert geometry column from points to polygons (triangles)
+        gdf_points["geometry"] = (
+            gdf_points["geometry"]
+            .map(lambda mp: point_to_triangle(mp.geoms[0], delta=200))
+        )
+        gdf = pd.concat((gdf_areas, gdf_points), ignore_index=True)
+    else:
+        gdf = gpd.read_file(os.path.join(datadir, eday_file),
+                            encoding="latin1")
 
     # for some reason, in 2019 columns were "FEDNUM" etc. but in 2015
     # and 2021 they are "FED_NUM" etc.
     if "FEDNUM" in gdf.columns:
         gdf = gdf.rename(columns={"FEDNUM": "FED_NUM",
                                   "PDNUM": "PD_NUM",
+                                  "PDTYPE": "PD_TYPE",
                                   "ADVPOLLNUM": "ADV_POLL_N",
                                   "ADVPDNUM": "ADV_POLL_N"})
     if "ADV_POLL" in gdf.columns:
         gdf = gdf.rename(columns={"ADV_POLL": "ADV_POLL_N"})
     if "ADVPOLL" in gdf.columns:
         gdf = gdf.rename(columns={"ADVPOLL": "ADV_POLL_N"})
+
+    # sort by riding and poll number
+    gdf = gdf.sort_values(["FED_NUM", "PD_NUM"])
 
     for prov, provcode in provcodes.items():
         # iterate over provinces, generate subset dataframe
@@ -365,8 +418,8 @@ def generate_provincial_geometries(year=2021):
 
         # for recent elections, separate Advance Poll geometries file
         # published, but we can "dissolve" it from the election-day
-        # file anyway:
-        gdf_prov_adv = (gdf_prov
+        # file anyway (only use normal PD_TYPE):
+        gdf_prov_adv = (gdf_prov[gdf_prov["PD_TYPE"] != "T"]
                         .sort_values(["FED_NUM", "ADV_POLL_N"])
                         .dissolve(by=["FED_NUM", "ADV_POLL_N"])
                         .reset_index()
@@ -403,13 +456,17 @@ def compute_riding_centroids(year):
     """
     filedata = geometry_files[year]
     filename = filedata["filename"]
-    layer = filedata["layer"]
+    layers = filedata["layers"]
 
     if not os.path.exists(os.path.join(datadir, filename)):
         print(f"please download shape file {filename} with get_geometries()")
         return
 
     # load GeoDataFrame
+    if layers is not None:
+        layer = layers["areas"]
+    else:
+        layer = None
     gdf = gpd.read_file(os.path.join(datadir, filename),
                         layer=layer, encoding="latin1")
 
@@ -462,6 +519,26 @@ def haversine(p1, p2):
     dlat = p2[1] - p1[1]
     dlon = p2[0] - p1[0]
     return 1.0 - cos(dlat) + cos(p1[1]) * cos(p2[1]) * (1.0 - cos(dlon))
+
+
+def point_to_triangle(point, delta=200):
+    """
+    Construct triangle around the first point in a Point
+
+    Parameters
+    ----------
+    point : shapely.Point object
+        the point around which to build the triangle
+    delta : float
+        the width of the base of the triangle (in metres?)
+
+    Returns
+    -------
+    shapely.Polygon object
+    """
+    return Polygon(shell=[(point.x - 0.5 * delta, point.y - 0.5 * delta),
+                          (point.x + 0.5 * delta, point.y - 0.5 * delta),
+                          (point.x, point.y + 0.5 * delta)])
 
 
 def get_nearest_ridings(riding, n=10, year=2021):
