@@ -15,15 +15,15 @@ outputdir = os.path.join(basedir, "output")
 
 geometry_files = {
     2008: {"filename": "pd308.2008.zip",
-           "layer": "pd308_a"},
+           "layers": {"areas": "pd308_a", "points": "pd308_p"}},
     2011: {"filename": "pd308.2011.zip",
-           "layer": "pd_a"},
+           "layers": {"areas": "pd_a", "points": "pd_p"}},
     2015: {"filename": "polling_divisions_boundaries_2015_shp.zip",
-           "layer": None},
+           "layers": None},
     2019: {"filename": "polling_divisions_boundaries_2019.shp.zip",
-           "layer": None},
+           "layers": None},
     2021: {"filename": "PD_CA_2021_EN.zip",
-           "layer": None}
+           "layers": None}
 }
 
 votes_encodings = {
