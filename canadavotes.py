@@ -122,8 +122,7 @@ class CanadaVotes:
         # election-day polls
         gdf_eday = geometry.merge_votes(gdf=gdf_eday, df_vote=vdf)
         gdf_eday_merged = (geometry
-                           .combine_mergedwith_columns(gdf=gdf_eday,
-                                                       robust=robust))
+                           .combine_mergedwith(gdf=gdf_eday))
         # advance polls
         gdf_advance = (geometry
                        .merge_votes(gdf=gdf_advance,

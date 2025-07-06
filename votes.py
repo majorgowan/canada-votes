@@ -10,9 +10,8 @@ import os
 import re
 import pandas as pd
 from zipfile import ZipFile
-from .constants import datadir, provcodes, codeprovs, votes_encodings
-from .utils import (get_int_part, area_to_ridings, apply_riding_map,
-                    validate_ridings)
+from .constants import datadir, provcodes, codeprovs, votes_encodings, areas
+from .utils import (get_int_part, apply_riding_map, validate_ridings)
 
 
 def load_vote_data_prov(year, province, ridings=None):
@@ -155,8 +154,8 @@ def load_vote_data_prov(year, province, ridings=None):
     # create a column with the numeric part of the poll number for merging
     # with the GeoDataFrames (exclude entirely non-numeric "Special Rules"
     # polls, i.e. vote by mail etc.)
-    df["PD_NUM"] = (df.loc[~df["Poll"].str.contains("S/R"), "Poll"]
-                    .map(get_int_part).astype("int"))
+    df["PD_NUM"] = df["Poll"].map(lambda val: (get_int_part(val)
+                                               if not "S/R" in val else 0))
 
     return df
 
@@ -180,7 +179,7 @@ def load_vote_data(ridings=None, area=None, year=2021):
     pd.DataFrame
     """
     if area is not None:
-        ridings = area_to_ridings(area, year)
+        ridings = validate_ridings(areas.get(area, []), year)
     elif ridings is not None:
         ridings = validate_ridings(ridings, year)
 
