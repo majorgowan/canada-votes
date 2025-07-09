@@ -102,9 +102,11 @@ areas = {
     "downtown_toronto": [
         "Davenport",
         "Spadina--Fort York",
+        "St. Paul's",
         "Toronto Centre",
         "Toronto--Danforth",
         "Toronto--St. Paul's",
+        "Trinity--Spadina",
         "University--Rosedale"
     ],
     "etobicoke": [

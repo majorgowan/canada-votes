@@ -237,14 +237,18 @@ def combine_mergedwith(gdf):
     # by votes (this will take one of the merge-target values)
     aggfunc_first = {col: lambda col: col.iloc[0] for col
                      in gdf.columns if col not in
-                     ["geometry", "Poll", "Party"] + list(aggfunc_sum.keys())}
+                     ["geometry", "Poll", "Party"]
+                     + list(aggfunc_sum.keys())}
     # final aggregation function dict
     aggfunc = {**aggfunc_poll, **aggfunc_sum, **aggfunc_first}
+
+    changed = False
 
     # iterate over the merge sets, popping the rows involved, dissolving
     # them into a single row, and concat them back onto the dataframe
     dissolved_dfs = []
     if len(merge_sets) > 0:
+        changed = True
         for fednum, merge_set_list in merge_sets.items():
             for merge_set in merge_set_list:
                 popset = gdf.index[(gdf["FED_NUM"] == fednum)
@@ -255,19 +259,54 @@ def combine_mergedwith(gdf):
                                                        ascending=False),
                                           by="Party", aggfunc=aggfunc)
                            .reset_index())
+
+                # to handle case where different parties have most votes in
+                # different merged ridings (so assignment of PD_NUM and Poll
+                # would be inconsistent)
+                df_diss_sorted = df_diss.sort_values("Votes",
+                                                     ascending=False)
+                if len(df_diss) == 0:
+                    print(fednum, merge_set)
+
+                df_diss["PD_NUM"] = df_diss_sorted["PD_NUM"].iloc[0]
+                df_diss["Poll"] = df_diss_sorted["Poll"].iloc[0]
+                # the goemetries should all match (this can be sped up a lot
+                # by only dissolving one group)
+                df_diss["geometry"] = df_diss_sorted["geometry"].iloc[0]
+
                 # remove popped rows
                 gdf = gdf.drop(popset, axis=0)
                 # save dissolved dataframe
                 dissolved_dfs.append(df_diss)
         # concat the dissolved dataframes to the remaining original
         gdf = pd.concat([gdf] + dissolved_dfs, ignore_index=True)
-        gdf = gdf.sort_values(["FED_NUM", "PD_NUM", "Party"])
 
+    # combine rows with the same numeric poll number
+    popset = (gdf[["DistrictName", "PD_NUM", "Party", "geometry"]]
+              .duplicated(keep=False)
+              .index)
+    if len(popset) > 0:
+        changed = True
+        # use same aggfunc as above but drop "DistrictName" and "PD_NUM"
+        # because they are now grouping keys
+        aggfunc = {k: v for (k, v) in aggfunc.items()
+                   if k not in ["PD_NUM", "DistrictName"]}
+        df_diss = (robust_dissolve(gdf.loc[popset]
+                                   .sort_values(["Party", "Poll"]),
+                                   by=["DistrictName", "PD_NUM", "Party"],
+                                   aggfunc=aggfunc)
+                   .reset_index())
+
+        gdf = gdf.drop(popset, axis=0)
+        gdf = pd.concat((gdf, df_diss), ignore_index=True)
+
+    if changed:
         # (re)compute vote fraction with aggregated columns
         gdf = compute_vote_fraction(gdf)
+        gdf = gdf.sort_values(["FED_NUM", "PD_NUM", "Party"])
 
-        # set index to usual form
-        gdf = gdf.set_index(["DistrictName", "Party", "PD_NUM"])
+    # set index to usual form
+    gdf = gdf.set_index(["DistrictName", "Party", "PD_NUM"])
 
     return gdf
 

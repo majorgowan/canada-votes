@@ -11,6 +11,7 @@ import os
 import json
 import pandas as pd
 from zipfile import ZipFile
+from itertools import combinations
 from .constants import datadir, provcodes, votes_encodings
 
 
@@ -70,6 +71,25 @@ def find_merge_sets(df_vote):
             # if first poll not in an existing set, creat new set
             if flag == 0:
                 merge_sets.append(set(merge_pair))
+
+        # go through the merge sets two at a time and if any
+        # overlap, merge them (then start over and repeat until
+        # none overlap)
+        no_overlaps = False
+        while not no_overlaps:
+            overlaps_flag = False
+            for combo in combinations(merge_sets, 2):
+                if not combo[0].isdisjoint(combo[1]):
+                    # remove the overlapping sets and append their union
+                    merge_sets.remove(combo[0])
+                    merge_sets.remove(combo[1])
+                    merge_sets.append(combo[0].union(combo[1]))
+                    # found an overlap so break out and start again
+                    overlaps_flag = True
+                    break
+            if not overlaps_flag:
+                no_overlaps = True
+
         return merge_sets
 
     srs_mp = (df_vote
