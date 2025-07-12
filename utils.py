@@ -11,11 +11,13 @@ import os
 import json
 import pandas as pd
 from zipfile import ZipFile
-from .constants import datadir, provcodes, areas, votes_encodings
+from itertools import combinations
+from .constants import datadir, provcodes, votes_encodings
 
 
 def get_int_part(s):
     """
+    Given a string, extract the first integer (if any)
 
     Parameters
     ----------
@@ -30,6 +32,78 @@ def get_int_part(s):
     if mch is not None:
         return int(mch[0])
     return None
+
+
+def find_merge_sets(df_vote):
+    """
+    Find all the poll division (numeric part only) that are merged together
+    (e.g. if poll divisions "18A" and "23B" are both MergedWith "17C", all
+    three of 18, 23 and 17 should belong to the same "merge set" and be
+    dissolved together, including divisions "18B", "23A" etc.)
+
+    Parameters
+    ----------
+    df_vote : DataFrame or GeoDataFrame
+        with columns "DistrictNumber", "Poll" and "MergedWith"
+
+    Returns
+    -------
+    dict
+        mapping DistrictNumber to list of sets of polls to merge
+    """
+    def extract_merge_pair(row):
+        pollnum = get_int_part(row["Poll"])
+        mwnum = get_int_part(row["MergedWith"])
+        if pollnum is None or mwnum is None:
+            return None
+        return mwnum, pollnum
+
+    def compute_merge_sets(merge_pairs):
+        merge_sets = []
+        for merge_pair in merge_pairs:
+            flag = 0
+            # check if the first poll in the pair is in an existing set
+            for merge_set in merge_sets:
+                if merge_pair[0] in merge_set:
+                    merge_set.add(merge_pair[1])
+                    flag = 1
+                    break
+            # if first poll not in an existing set, creat new set
+            if flag == 0:
+                merge_sets.append(set(merge_pair))
+
+        # go through the merge sets two at a time and if any
+        # overlap, merge them (then start over and repeat until
+        # none overlap)
+        no_overlaps = False
+        while not no_overlaps:
+            overlaps_flag = False
+            for combo in combinations(merge_sets, 2):
+                if not combo[0].isdisjoint(combo[1]):
+                    # remove the overlapping sets and append their union
+                    merge_sets.remove(combo[0])
+                    merge_sets.remove(combo[1])
+                    merge_sets.append(combo[0].union(combo[1]))
+                    # found an overlap so break out and start again
+                    overlaps_flag = True
+                    break
+            if not overlaps_flag:
+                no_overlaps = True
+
+        return merge_sets
+
+    srs_mp = (df_vote
+              .dropna(subset="MergedWith")
+              .groupby("DistrictNumber")
+              .apply(lambda grp: grp.apply(extract_merge_pair,
+                                           axis=1).sort_values().unique(),
+                     include_groups=False))
+
+    merge_sets_dict = {}
+    for district, mp_array in srs_mp.items():
+        merge_sets_dict[district] = compute_merge_sets(mp_array)
+
+    return merge_sets_dict
 
 
 def write_json(obj, filename, **json_args):
@@ -187,27 +261,6 @@ def provs_from_ridings(year, ridings):
         if provcode not in provcode_list:
             provcode_list.append(provcode)
     return provcode_list
-
-
-def area_to_ridings(area, year):
-    """
-    Convert area to list of riding numbers in a given year
-
-    Parameters
-    ----------
-    area : str
-        name of predefined area
-    year : int or list
-        election year
-
-    Returns
-    -------
-    list
-        ridings names
-    """
-    all_ridings = areas[area]
-    ridings = apply_riding_map(year, all_ridings)
-    return ridings
 
 
 def apply_riding_map(year, ridings=None):

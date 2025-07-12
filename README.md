@@ -219,6 +219,7 @@ cdv.query_ridings(".*Vic", year=2021)
 ['Sydney--Victoria', 'Victoria']
 ```
 ```python
+# new CanadaVotes object based on four ridings nearest to "Victoria"
 victoria = cdv.CanadaVotes(ridings=cdv.get_nearest_ridings("Victoria", 
                                                            year=2021, n=4),
                            years=2021)
