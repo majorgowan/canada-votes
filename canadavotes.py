@@ -7,10 +7,8 @@ Email:   mark.fruman@yahoo.com
 -------------------------------------------------------
 """
 import pandas as pd
-import geopandas as gpd
 from .constants import areas
-from .utils import validate_ridings, apply_riding_map
-from . import votes, geometry, viz
+from . import votes, geometry, utils, viz
 
 
 class CanadaVotes:
@@ -56,35 +54,25 @@ class CanadaVotes:
             ridings = [ridings]
         for year in self.years:
             # remove the requested ridings from each data table
-            valid_ridings = validate_ridings(ridings)
+            valid_ridings = utils.validate_ridings(ridings)
             if len(list(valid_ridings)) == 0:
                 continue
-            fed_nums = apply_riding_map(year, valid_ridings)
-            self.data[year]["vdf"] = (
-                self.data[year]["vdf"]
-                .get(~self.data[year]["vdf"]["DistrictName"]
-                     .isin(valid_ridings))
-            )
-            self.data[year]["gdf_eday"] = (
-                self.data[year]["gdf_eday"]
-                .drop(index=valid_ridings, level="DistrictName",
-                      errors="ignore")
-            )
-            self.data[year]["gdf_eday_merged"] = (
-                self.data[year]["gdf_eday_merged"]
-                .drop(index=valid_ridings, level="DistrictName",
-                      errors="ignore")
-            )
-            self.data[year]["gdf_advance"] = (
-                self.data[year]["gdf_advance"]
-                .drop(index=valid_ridings, level="DistrictName",
-                      errors="ignore")
-            )
-            self.data[year]["gdf_ridings"] = (
-                self.data[year]["gdf_ridings"]
-                .drop(fed_nums, axis=0, errors="ignore")
-            )
-            # remove loaded flag from the year
+
+            # remove data from all the tables
+            for vdf_key in self.data[year]["vdf"]:
+                self.data[year]["vdf"][vdf_key] = (
+                    self.data[year]["vdf"][vdf_key]
+                    .get(~self.data[year]["vdf"][vdf_key]["DistrictName"]
+                         .isin(valid_ridings))
+                )
+            fed_nums = utils.apply_riding_map(year, valid_ridings)
+            for gdf_key in self.data[year]["gdf"]:
+                self.data[year]["gdf"][gdf_key] = (
+                    self.data[year]["gdf"][gdf_key]
+                    .get(~self.data[year]["gdf"][gdf_key]["FED_NUM"]
+                         .isin(fed_nums))
+                )
+
             self.loaded[year].difference_update(valid_ridings)
 
         # remove the requested ridings from the object
@@ -92,13 +80,11 @@ class CanadaVotes:
         return self
 
     def _init_year(self, year):
-        # initialize empty dataframes for new year
+        # initialize empty dicts for new year
         self.data[year] = {
-            "gdf_eday": gpd.GeoDataFrame(),
-            "gdf_eday_merged": gpd.GeoDataFrame(),
-            "gdf_advance": gpd.GeoDataFrame(),
-            "gdf_ridings": gpd.GeoDataFrame(),
-            "vdf": pd.DataFrame()
+            "gdf": {},
+            "vdf": {},
+            "candidate_map": {}
         }
         self.loaded[year] = set()
 
@@ -111,62 +97,57 @@ class CanadaVotes:
                                                advance=True)
         gdf_ridings = geometry.dissolve_ridings(gdf=gdf_advance, robust=robust)
 
-        return gdf_eday, gdf_advance, gdf_ridings
+        return {
+            "eday": gdf_eday,
+            "advance": gdf_advance,
+            "ridings": gdf_ridings
+        }
 
     @staticmethod
     def _load_votes(year, ridings):
-        return votes.load_vote_data(ridings=ridings, year=year)
+        # load votes for selected year and ridings list
+        vdf = votes.load_vote_data(ridings=ridings, year=year)
+        # split votes into election-day, advance and special
+        return votes.split_vote_data(vdf)
 
-    @staticmethod
-    def _merge_votes(gdf_eday, gdf_advance, vdf, robust=False):
-        # election-day polls
-        gdf_eday = geometry.merge_votes(gdf=gdf_eday, df_vote=vdf)
-        gdf_eday_merged = (geometry
-                           .combine_mergedwith(gdf=gdf_eday))
-        # advance polls
-        gdf_advance = (geometry
-                       .merge_votes(gdf=gdf_advance,
-                                    df_vote=vdf))
+    def _load_all(self, year, ridings):
+        gdf_dict = self._load_geometries(year=year, ridings=ridings)
+        vdf_dict = self._load_votes(year=year, ridings=ridings)
 
-        # add columns for election-day votes in advance poll areas
-        gdf_advance = (
-            votes.add_eday_votes(gdf_eday=gdf_eday,
-                                 gdf_advance=gdf_advance)
-        )
+        # add election-day votes to advance-votes table
+        vdf_dict["advance"] = utils.add_eday_votes(vdf_dict["eday"],
+                                                   vdf_dict["advance"],
+                                                   gdf_dict["eday"])
 
-        # set index on gdf_eday for consistency
-        gdf_eday = gdf_eday.set_index(["DistrictName", "Party", "PD_NUM"])
+        # build merge map from election-day votes table
+        merge_sets_dict = utils.find_merge_sets(vdf_dict["eday"])
+        merge_map = utils.make_merge_map(vdf_dict["eday"], merge_sets_dict)
 
-        return gdf_eday, gdf_eday_merged, gdf_advance
+        # apply merge-map to votes
+        vdf_dict["eday_merged"] = votes.merge_eday_polls(merge_map,
+                                                         vdf_dict["eday"])
+        gdf_dict["eday_merged"] = geometry.dissolve_mergedwith(merge_map,
+                                                               gdf_dict["eday"])
 
-    def _load_all(self, year, ridings, robust=False):
-        (gdf_eday,
-         gdf_advance,
-         gdf_ridings) = self._load_geometries(year=year,
-                                              ridings=ridings,
-                                              robust=robust)
-        vdf = self._load_votes(year=year, ridings=ridings)
-        (gdf_eday,
-         gdf_eday_merged,
-         gdf_advance) = self._merge_votes(gdf_eday=gdf_eday,
-                                          gdf_advance=gdf_advance,
-                                          vdf=vdf, robust=robust)
-        # append new data to object data
-        self.data[year]["gdf_eday"] = pd.concat(
-            (self.data[year]["gdf_eday"], gdf_eday)
-        )
-        self.data[year]["gdf_eday_merged"] = pd.concat(
-            (self.data[year]["gdf_eday_merged"], gdf_eday_merged)
-        )
-        self.data[year]["gdf_advance"] = pd.concat(
-            (self.data[year]["gdf_advance"], gdf_advance)
-        )
-        self.data[year]["gdf_ridings"] = pd.concat(
-            (self.data[year]["gdf_ridings"], gdf_ridings)
-        )
-        self.data[year]["vdf"] = pd.concat(
-            (self.data[year]["vdf"], vdf)
-        )
+        for gdf_key in ("eday", "eday_merged", "advance", "ridings"):
+            if gdf_key in self.data[year]["gdf"]:
+                self.data[year]["gdf"][gdf_key] = pd.concat(
+                    (self.data[year]["gdf"][gdf_key],
+                     gdf_dict[gdf_key]),
+                    ignore_index=True
+                )
+            else:
+                self.data[year]["gdf"][gdf_key] = gdf_dict[gdf_key]
+
+        for vdf_key in ("eday", "eday_merged", "advance", "special"):
+            if vdf_key in self.data[year]["vdf"]:
+                self.data[year]["vdf"][vdf_key] = pd.concat(
+                    (self.data[year]["vdf"][vdf_key],
+                     vdf_dict[vdf_key]),
+                    ignore_index=True
+                )
+            else:
+                self.data[year]["vdf"][vdf_key] = vdf_dict[vdf_key]
 
         # update loaded dictionary
         self.loaded[year] = self.loaded[year].union(ridings)
@@ -177,12 +158,12 @@ class CanadaVotes:
         """
         for year in self.years:
             print(f"Loading year {year} . . . ", end="")
-            new_ridings = validate_ridings(
+            new_ridings = utils.validate_ridings(
                 list(self.ridings.difference(self.loaded[year])),
                 year=year
             )
             if len(list(new_ridings)) > 0:
-                self._load_all(year, new_ridings, robust=robust)
+                self._load_all(year, new_ridings)
             print("loaded.")
 
         return self
@@ -340,13 +321,5 @@ class CanadaVotes:
         return_str += f"Ridings:\n"
         for rid in self.ridings:
             return_str += f"\t{rid}\n"
-        for year in self.data:
-            return_str += f"Election {year} parties:\n"
-            parties = self.parties(year)
-            if len(list(parties)) > 0:
-                for party in parties:
-                    return_str += f"\t{party}\n"
-            else:
-                return_str += "\tnot loaded\n"
         return_str += "\n"
         return return_str

@@ -11,7 +11,7 @@ import re
 import pandas as pd
 from zipfile import ZipFile
 from .constants import datadir, provcodes, codeprovs, votes_encodings, areas
-from .utils import (get_int_part, apply_riding_map, validate_ridings)
+from .utils import get_int_part, apply_riding_map, validate_ridings
 
 
 def load_vote_data_prov(year, province, ridings=None):
@@ -197,78 +197,118 @@ def load_vote_data(ridings=None, area=None, year=2021):
     return df
 
 
-def compute_vote_fraction(df_vote):
+def split_vote_data(df_vote):
     """
-    Calculate fraction of votes earned by each candidate
+    Split vote data into election-day, advance and "special" parts based
+    on polling division number
 
     Parameters
     ----------
     df_vote : pd.DataFrame
-        containing vote data
 
     Returns
     -------
-    pd.DataFrame or gpd.GeoDataFrame
+    dict
+        with election-day, advance and special dataframes
     """
-    df_vote = df_vote.copy()
+    df_eday = df_vote[(df_vote["PD_NUM"] > 0)
+                      & (df_vote["PD_NUM"] < 600)].copy()
+    df_adv = df_vote[df_vote["PD_NUM"] >= 600].copy()
+    df_special = df_vote.loc[df_vote["Poll"].str.match(r"^ S")].copy()
 
-    # Compute fraction of all (potential) electors and fraction of all voters
-    df_vote["PotentialVoteFraction"] = (df_vote["Votes"]
-                                        .divide(df_vote["Electors"]))
-    df_vote["VoteFraction"] = (df_vote["Votes"]
-                               .divide(df_vote["TotalVotes"]))
-    # replace any nans with zero (probably total votes were zero)
-    df_vote["VoteFraction"] = df_vote["VoteFraction"].fillna(0.0)
-    df_vote["PotentialVoteFraction"] = (df_vote["PotentialVoteFraction"]
-                                        .fillna(0.0))
-    return df_vote
+    return {
+        "eday": df_eday,
+        "advance": df_adv,
+        "special": df_special
+    }
 
 
-def add_eday_votes(gdf_eday, gdf_advance):
+def merge_eday_polls(merge_map, df_eday):
     """
-    add election-day votes to the associated advance poll rows
+    Merge election-day polls whose vote-counts are merged (due to
+    insufficient number of votes at a poll for anonymity purposes)
 
     Parameters
     ----------
-    gdf_eday : gpd.GeoDataFrame
-        with election-day polling station boundaries and votes
-    gdf_advance : gpd.GeoDataFrame
-        with advance-poll station boundaries and votes
+    merge_map : dict
+        mapping district numbers to poll numbers to the merge-sets they
+        belong to (usually a singleton set)
+    df_eday : pd.DataFrame
+        containing polls and votes data
 
     Returns
     -------
-    gdf_advance
-        with new column for election day votes
+    df_eday_merged
+        with polls merged based on the MergedWith column
     """
-    gdf_eday_votes = (gdf_eday
-                      .get(["DistrictName", "Party",
-                            "ADV_POLL_N", "Votes", "TotalVotes"])
-                      .groupby(["DistrictName", "Party",
-                                "ADV_POLL_N"],
-                               as_index=False)
-                      .sum()
-                      .rename(columns={"ADV_POLL_N": "PD_NUM",
-                                       "Votes": "ElectionDayVotes",
-                                       "TotalVotes": "TotalElectionDayVotes"}))
-    gdf_advance = (gdf_advance
-                   .merge(gdf_eday_votes,
-                          on=["DistrictName", "Party", "PD_NUM"],
-                          how="left"))
+    # sort data to make sure the PD_NUM gets assigned the same as in geometry
+    df_eday_merged = (df_eday
+                      .sort_values(["DistrictNumber", "PD_NUM", "Poll"])
+                      .copy())
 
-    # compute total vote fraction
-    gdf_advance["AllVoteFraction"] = (
-        (gdf_advance["Votes"] + gdf_advance["ElectionDayVotes"])
-        .divide((gdf_advance["TotalVotes"]
-                 + gdf_advance["TotalElectionDayVotes"]))
+    df_eday_merged["MergeSet"] = (
+        df_eday_merged
+        .apply(lambda row: merge_map[row["DistrictNumber"]][row["PD_NUM"]],
+               axis=1)
     )
 
-    # compute advance vote fraction (if not already computed)
-    if "VoteFraction" not in gdf_advance.columns:
-        gdf_advance["VoteFraction"] = (gdf_advance["Votes"]
-                                       .divide(gdf_advance["TotalVotes"]))
+    # merge rows belonging to same merge-sets
+    def merge_grpfun(grp):
+        if len(grp) == 1:
+            return grp.iloc[0]
+        grp = grp.sort_values(["PD_NUM", "Poll"])
+        retsrs = grp.iloc[0].copy()
+        for col in ["Votes", "Electors",
+                    "RejectedBallots", "TotalVotes"]:
+            retsrs[col] = grp[col].sum()
+        if "Poll" in grp.columns:
+            retsrs["Poll"] = ", ".join(grp["Poll"].str.strip())
+        return retsrs
 
-    gdf_advance = gdf_advance.set_index(["DistrictName",
-                                         "Party",
-                                         "PD_NUM"])
+    # save column order to put it back the way it was after the merge
+    cols = df_eday_merged.columns
 
-    return gdf_advance
+    df_eday_merged = (
+        df_eday_merged
+        .groupby(["Party", "MergeSet"])
+        .apply(merge_grpfun, include_groups=False)
+        .reset_index()
+        .sort_values(["DistrictNumber", "PD_NUM", "Party"])
+        .reindex(cols, axis=1)
+    )
+
+    return df_eday_merged
+
+
+def pivot_vote_tables(df_vote, values_column="Votes"):
+    """
+    Divite votes table into tables for each district and pivot them
+    so that votes for each party form columns and each polling division
+    a single row (instead of one row per party).
+
+    Parameters
+    ----------
+    df_vote : pd.DataFrame
+    values_column : str
+        name of column to use for values in party columns
+
+    Returns
+    -------
+    dict
+        mapping district number to pivoted vote table
+    """
+    df_pivots = {}
+    for fed_num, grp in df_vote.groupby("DistrictNumber"):
+        df_pivots[fed_num] = (
+            grp[["DistrictName", "Poll", "PD_NUM",
+                 "Party", "Votes"]]
+            .pivot(index=["DistrictName", "Poll", "PD_NUM",],
+                   columns="Party", values=values_column)
+            .reset_index()
+            .sort_values("PD_NUM")
+        )
+        df_pivots[fed_num][f"Total{values_column}"] = (df_pivots[fed_num]
+                                                       .iloc[:, 3:-1]
+                                                       .sum(axis=1))
+
+    return df_pivots

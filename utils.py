@@ -106,6 +106,40 @@ def find_merge_sets(df_vote):
     return merge_sets_dict
 
 
+def make_merge_map(df_eday, merge_sets_dict):
+    """
+    Construct mapping from district numbers to poll numbers to the merge-sets
+    they belong to (usually a singleton set), denoted by a string of the
+    form "FEDNUM_PDNUM" or "FEDNUM_MERGE_MERGEGRPNUM"
+
+    Parameters
+    ----------
+    df_eday : pd.DataFrame
+        with DistrictNumber, Poll, PD_NUM and MergedWith columns
+    merge_sets_dict : dict
+        mapping district number to list of sets of polls to be merged
+        (see find_merge_sets() function)
+
+    Returns
+    -------
+    dict
+    """
+    merge_map = {}
+    for fed_num in df_eday["DistrictNumber"].unique():
+        merge_map[fed_num] = {
+            pd_num: f"{fed_num}_{pd_num}" for pd_num
+            in df_eday.loc[df_eday["DistrictNumber"] == fed_num,
+            "PD_NUM"].unique()
+        }
+        if fed_num in merge_sets_dict:
+            merge_sets = merge_sets_dict[fed_num]
+            for iset, merge_set in enumerate(merge_sets):
+                for pd_num in merge_set:
+                    merge_map[fed_num][pd_num] = f"{fed_num}_merge_{iset:03d}"
+
+    return merge_map
+
+
 def write_json(obj, filename, **json_args):
     """
     Write the
@@ -378,3 +412,53 @@ def party_difference(gdf_vote, plot_variable, party1, party2):
     gdf1["Difference"] = gdf1[plot_variable] - gdf2[plot_variable]
 
     return gdf1
+
+
+def add_eday_votes(vdf_eday, vdf_adv, gdf):
+    """
+    Build a mapping from election-day polling division to advance polling
+    division (which is in the geometry tables) and use it to add election-day
+    votes corresponding to each advance poll division
+
+    Parameters
+    ----------
+    vdf_eday : pd.DataFrame
+        election-day votes table
+    vdf_adv : pd.DataFrame
+        advance votes table
+    gdf : gpd.GeoDataFrame
+        election-day geometry table
+
+    Returns
+    -------
+    pd.DataFrame
+        advance-poll votes table with column for election-day votes
+    """
+    # mapping from election-day to advance poll numbers
+    eday_to_advance_dict = {}
+    for fed_num, grp in gdf[["FED_NUM", "PD_NUM",
+                             "ADV_POLL_N"]].groupby("FED_NUM"):
+        eday_to_advance_dict[fed_num] = (grp.set_index("PD_NUM")
+                                         .apply(lambda row: row["ADV_POLL_N"],
+                                                axis=1)
+                                         .to_dict())
+    # convert the mapping to a series with same index as eday dataframe
+    vdf_eday_adv_poll_n_srs = (
+        vdf_eday
+        .apply(lambda row: (eday_to_advance_dict.get(row["DistrictNumber"], {})
+                            .get(row["PD_NUM"], 0)),
+               axis=1)
+    )
+
+    # sum election-day votes for each advance-poll division
+    vdf_adv["ElectionDayVotes"] = vdf_adv.apply(
+        lambda row: vdf_eday.loc[(vdf_eday["DistrictNumber"]
+                                  == row["DistrictNumber"])
+                                 & (vdf_eday_adv_poll_n_srs == row["PD_NUM"])
+                                 & (vdf_eday["Party"] == row["Party"]),
+                                 "Votes"].sum(),
+        axis=1
+    )
+    vdf_adv["TotalVotes"] = vdf_adv["Votes"] + vdf_adv["ElectionDayVotes"]
+
+    return vdf_adv

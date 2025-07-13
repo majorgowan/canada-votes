@@ -15,7 +15,6 @@ from zipfile import ZipFile
 from shapely.errors import GEOSException
 from shapely import (MultiPolygon, Polygon, unary_union, coverage_union_all,
                      simplify)
-from .votes import compute_vote_fraction
 from .constants import codeprovs, datadir, areas, geometry_files, provcodes
 from .utils import (provs_from_ridings, validate_ridings, apply_riding_map,
                     get_inv_riding_map, find_merge_sets)
@@ -130,9 +129,12 @@ def dissolve_ridings(gdf, robust=True):
     """
     # join polygons of boundaries in each riding
     if robust:
-        gdf = robust_dissolve(gdf, by="FED_NUM")
+        gdf = (robust_dissolve(gdf[["FED_NUM", "geometry"]], by="FED_NUM")
+               .reset_index())
     else:
-        gdf = gdf.dissolve(by="FED_NUM", method="coverage")
+        gdf = (gdf[["FED_NUM", "geometry"]]
+               .dissolve(by="FED_NUM", method="coverage")
+               .reset_index())
 
     # switch coordinate system to extract centroid, then switch back
     gdf = gdf.to_crs(epsg=2263)
@@ -144,54 +146,16 @@ def dissolve_ridings(gdf, robust=True):
     return gdf
 
 
-def merge_votes(gdf, df_vote):
-    """
-    Merge election results into a GeoDataFrame
-
-    Parameters
-    ----------
-    gdf : gpd.GeoDataFrame
-        geometry data
-    df_vote : pd.DataFrame
-        votes data
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        geometry data with merged votes data
-    """
-    # detect whether geometry data is for advance poll
-    if "PD_NUM" in gdf.columns:
-        advance = False
-    else:
-        advance = True
-
-    if not advance:
-        # merge votes to geodataframe on the numeric part of the Poll
-        gdf = gdf.merge(df_vote,
-                        left_on=["FED_NUM", "PD_NUM"],
-                        right_on=["DistrictNumber", "PD_NUM"],
-                        how="left")
-
-    else:
-        # merge votes to geodataframe on the Advance Poll number
-        gdf = gdf.merge(df_vote,
-                        left_on=["FED_NUM", "ADV_POLL_N"],
-                        right_on=["DistrictNumber", "PD_NUM"],
-                        how="left")
-        # set index to conform to election-day format
-        # gdf = gdf.set_index(["DistrictName", "Party", "Poll"])
-
-    return gdf
-
-
-def combine_mergedwith(gdf):
+def dissolve_mergedwith(merge_map, gdf):
     """
     In some cases multiple poll divisions are counted together, denoted
     by a non-missing "MergedWith" column in df_vote
 
     Parameters
     ----------
+    merge_map : dict
+        mapping district numbers to poll numbers to the merge-sets they
+        belong to (usually a singleton set)
     gdf : gpd.GeoDataFrame
         with merged vote data
 
@@ -199,116 +163,60 @@ def combine_mergedwith(gdf):
     -------
     gpd.GeoDataFrame
     """
-    # since we're writing new columns, don't touch passed-in DataFrame
-    gdf = gdf.copy()
+    # sort data to make sure PD_NUM gets assigned the same as in votes table
+    gdf_merged = gdf.sort_values(["FED_NUM", "PD_NUM"]).copy()
+    gdf_merged["MergeSet"] = (
+        gdf_merged.apply(lambda row: merge_map[row["FED_NUM"]][row["PD_NUM"]],
+                         axis=1)
+    )
 
-    # plan is to dissolve polling stations
-    # grouped by common vote-counting merges
+    # save column order to put it back the way it was after the dissolve
+    cols = gdf_merged.columns
 
-    # this is to handle a bug in some riding vote files where the
-    # rows for the different parties at the same poll
-    # have different "MergedWith" values (some NaN, some non-NaN)
-    # the code below will set the MergedWith value to the majority
-    # value within each poll
-    def grpfun(grp):
-        grp = grp.copy()
-        grpmode = grp["MergedWith"].mode()
-        if len(grpmode) > 0:
-            grp["MergedWith"] = grpmode.iloc[0]
-        return grp
-    gdf = (gdf
-           .groupby(["DistrictName", "PD_NUM"], as_index=False)[gdf.columns]
-           .apply(grpfun))
+    gdf_merged = (
+        robust_dissolve(
+            gdf_merged,
+            by="MergeSet",
+            aggfunc={colname: lambda col: col.iloc[0]
+                     for colname in gdf_merged.columns
+                     if colname != "geometry"})
+        .sort_values(["FED_NUM", "PD_NUM"])
+        .reindex(cols, axis=1)
+    )
+    gdf_merged.index = range(len(gdf_merged))
 
-    # compute the "merge sets", i.e. groups of polls that all merge to the
-    # same target poll number (N.B. if there are multiple polls with the same
-    # number in the votes file -- e.g. 17A and 17B -- and any are involved
-    # in a merge, all of them are grouped in the same merge set.  The
-    # boundary files don't do A's and B's.  What choice # did I have?
-    merge_sets = find_merge_sets(gdf)
+    return gdf_merged
 
-    # construct the aggregation function for each column to apply on dissolve
-    # compose poll string consisting of all merged polls
-    aggfunc_poll = {"Poll": lambda col: ", ".join(col.str.strip().values)}
-    # add the votes together (usually only one will be nonzero)
-    aggfunc_sum = {col: "sum" for col in
-                   ["Votes", "TotalVotes", "Electors", "RejectedBallots"]}
-    # for other columns, take the first value in the group after sorting
-    # by votes (this will take one of the merge-target values)
-    aggfunc_first = {col: lambda col: col.iloc[0] for col
-                     in gdf.columns if col not in
-                     ["geometry", "Poll", "Party"]
-                     + list(aggfunc_sum.keys())}
-    # final aggregation function dict
-    aggfunc = {**aggfunc_poll, **aggfunc_sum, **aggfunc_first}
 
-    changed = False
+def merge_geometry_into_pivot_tables(df_pivots_dict, gdf):
+    """
+    Merge geometries into pivoted vote tables
 
-    # iterate over the merge sets, popping the rows involved, dissolving
-    # them into a single row, and concat them back onto the dataframe
-    dissolved_dfs = []
-    if len(merge_sets) > 0:
-        changed = True
-        for fednum, merge_set_list in merge_sets.items():
-            for merge_set in merge_set_list:
-                popset = gdf.index[(gdf["FED_NUM"] == fednum)
-                                   & (gdf["PD_NUM"].isin(merge_set))]
+    Parameters
+    ----------
+    df_pivots_dict : dict
+        mapping district number to pivoted votes table
+    gdf : gpd.GeoDataFrame
 
-                df_diss = (robust_dissolve(gdf.loc[popset]
-                                          .sort_values(["Party", "Votes"],
-                                                       ascending=False),
-                                          by="Party", aggfunc=aggfunc)
-                           .reset_index())
+    Returns
+    -------
+    dict
+        df_pivots_dict with geometries added
+    """
+    if "PD_NUM" in gdf.columns:
+        righton = "PD_NUM"
+    else:
+        righton = "ADV_POLL_N"
 
-                # to handle case where different parties have most votes in
-                # different merged ridings (so assignment of PD_NUM and Poll
-                # would be inconsistent)
-                df_diss_sorted = df_diss.sort_values("Votes",
-                                                     ascending=False)
-                if len(df_diss) == 0:
-                    print(fednum, merge_set)
+    for fed_num in df_pivots_dict:
+        df_pivots_dict[fed_num] = gpd.GeoDataFrame(
+            df_pivots_dict[fed_num].merge(
+                gdf.loc[gdf["FED_NUM"] == fed_num,
+                        [righton, "geometry"]],
+                left_on="PD_NUM", right_on=righton, how="left")
+        )
 
-                df_diss["PD_NUM"] = df_diss_sorted["PD_NUM"].iloc[0]
-                df_diss["Poll"] = df_diss_sorted["Poll"].iloc[0]
-                # the goemetries should all match (this can be sped up a lot
-                # by only dissolving one group)
-                df_diss["geometry"] = df_diss_sorted["geometry"].iloc[0]
-
-                # remove popped rows
-                gdf = gdf.drop(popset, axis=0)
-                # save dissolved dataframe
-                dissolved_dfs.append(df_diss)
-        # concat the dissolved dataframes to the remaining original
-        gdf = pd.concat([gdf] + dissolved_dfs, ignore_index=True)
-
-    # combine rows with the same numeric poll number
-    popset = (gdf[["DistrictName", "PD_NUM", "Party", "geometry"]]
-              .duplicated(keep=False)
-              .index)
-    if len(popset) > 0:
-        changed = True
-        # use same aggfunc as above but drop "DistrictName" and "PD_NUM"
-        # because they are now grouping keys
-        aggfunc = {k: v for (k, v) in aggfunc.items()
-                   if k not in ["PD_NUM", "DistrictName"]}
-        df_diss = (robust_dissolve(gdf.loc[popset]
-                                   .sort_values(["Party", "Poll"]),
-                                   by=["DistrictName", "PD_NUM", "Party"],
-                                   aggfunc=aggfunc)
-                   .reset_index())
-
-        gdf = gdf.drop(popset, axis=0)
-        gdf = pd.concat((gdf, df_diss), ignore_index=True)
-
-    if changed:
-        # (re)compute vote fraction with aggregated columns
-        gdf = compute_vote_fraction(gdf)
-        gdf = gdf.sort_values(["FED_NUM", "PD_NUM", "Party"])
-
-    # set index to usual form
-    gdf = gdf.set_index(["DistrictName", "Party", "PD_NUM"])
-
-    return gdf
+    return df_pivots_dict
 
 
 def robust_dissolve(gdf, by=None, aggfunc=None, verbose=False):
@@ -577,7 +485,7 @@ def haversine(p1, p2):
     return 1.0 - cos(dlat) + cos(p1[1]) * cos(p2[1]) * (1.0 - cos(dlon))
 
 
-def point_to_triangle(point, delta=200):
+def point_to_triangle(point, delta=100):
     """
     Construct triangle around the first point in a Point
 

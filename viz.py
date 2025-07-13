@@ -11,7 +11,6 @@ import contextily as cx
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from .utils import get_inv_riding_map, party_difference
-from .votes import compute_vote_fraction
 from .constants import partycolours, outputdir
 
 
@@ -140,7 +139,7 @@ def votes_plot(gdf_vote, party, gdf_ridings=None, plot_variable="VoteFraction",
 
     if plot_variable not in gdf_vote.columns:
         if plot_variable == "VoteFraction":
-            gdf_vote = compute_vote_fraction(gdf_vote)
+            gdf_vote = gdf_vote #compute_vote_fraction(gdf_vote)
         else:
             print(f"{plot_variable} not in dataframe")
             return
