@@ -72,6 +72,11 @@ class CanadaVotes:
                     .get(~self.data[year]["gdf"][gdf_key]["FED_NUM"]
                          .isin(fed_nums))
                 )
+            # remove candidates from candidates map
+            self.data[year]["candidate_map"] = {
+                k: v for k, v in self.data[year]["candidate_map"].items()
+                if k not in fed_nums
+            }
 
             self.loaded[year].difference_update(valid_ridings)
 
@@ -111,6 +116,7 @@ class CanadaVotes:
         return votes.split_vote_data(vdf)
 
     def _load_all(self, year, ridings):
+        # load raw geometries and votes
         gdf_dict = self._load_geometries(year=year, ridings=ridings)
         vdf_dict = self._load_votes(year=year, ridings=ridings)
 
@@ -118,6 +124,9 @@ class CanadaVotes:
         vdf_dict["advance"] = utils.add_eday_votes(vdf_dict["eday"],
                                                    vdf_dict["advance"],
                                                    gdf_dict["eday"])
+
+        # build candidate map
+        candidate_map = votes.make_candidate_map(vdf_dict["eday"])
 
         # build merge map from election-day votes table
         merge_sets_dict = utils.find_merge_sets(vdf_dict["eday"])
@@ -148,6 +157,11 @@ class CanadaVotes:
                 )
             else:
                 self.data[year]["vdf"][vdf_key] = vdf_dict[vdf_key]
+
+        # append new candidates
+        self.data[year]["candidate_map"] = {
+            **self.data[year]["candidate_map"], **candidate_map
+        }
 
         # update loaded dictionary
         self.loaded[year] = self.loaded[year].union(ridings)
@@ -274,20 +288,26 @@ class CanadaVotes:
         """
         if "vdf" in self.data[year]:
             if by.lower() == "party":
-                df = (self.data[year]["vdf"]
+                df = (pd.concat((self.data[year]["vdf"]["eday"],
+                                 self.data[year]["vdf"]["advance"],
+                                 self.data[year]["vdf"]["special"]),
+                                ignore_index=True)
                       .groupby("Party")
-                      .aggregate({"Votes": "sum", "TotalVotes": "sum"}))
-                df["VoteFraction"] = df["Votes"].divide(df["TotalVotes"])
+                      .aggregate({"Votes": "sum"}))
+                df["VoteFraction"] = df["Votes"] / (df["Votes"].sum())
                 if key.lower() == "fraction":
                     return df.sort_values("VoteFraction", ascending=False)
                 else:
                     return df.sort_values("Votes", ascending=False)
 
             elif by.lower() == "candidate":
-                df = (self.data[year]["vdf"]
+                df = (pd.concat((self.data[year]["vdf"]["eday"],
+                                 self.data[year]["vdf"]["advance"],
+                                 self.data[year]["vdf"]["special"]),
+                                ignore_index=True)
                       .get(["Party", "DistrictName",
                             "CandidateLastName", "CandidateFirstName",
-                            "ElectedIndicator", "Votes", "TotalVotes"])
+                            "ElectedIndicator", "Votes"])
                       .copy())
                 df["Estring"] = (df["ElectedIndicator"]
                                  .map(lambda val: ("  (Elected)"
@@ -297,8 +317,15 @@ class CanadaVotes:
                                    + df["Estring"])
                 df = (df
                       .groupby(["Candidate", "Party", "DistrictName"])
-                      .aggregate({"Votes": "sum", "TotalVotes": "sum"}))
-                df["VoteFraction"] = df["Votes"].divide(df["TotalVotes"])
+                      .aggregate({"Votes": "sum"}))
+                # sum votes by riding
+                ridingsum = df.groupby(level="DistrictName").sum()
+                df["VoteFraction"] = (
+                    df.apply(lambda row: row["Votes"] / (ridingsum
+                                                         .loc[row.name[-1],
+                                                              "Votes"]),
+                                                         axis=1)
+                )
                 if key.lower() == "fraction":
                     return df.sort_values("VoteFraction", ascending=False)
                 else:

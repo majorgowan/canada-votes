@@ -115,14 +115,6 @@ def load_vote_data_prov(year, province, ridings=None):
     # for some reason, DistrictName ends with " in 2008
     df["DistrictName"] = df["DistrictName"].str.strip("\"")
 
-    # create column with the total number of votes for all parties at that poll
-    df_totvotes = (df
-                   .get(["DistrictName", "Poll", "Votes"])
-                   .groupby(["DistrictName", "Poll"], as_index=False)
-                   .sum()
-                   .rename(columns={"Votes": "TotalVotes"}))
-    df = df.merge(df_totvotes, on=["DistrictName", "Poll"], how="left")
-
     # distinguish value in Party column where multiple Independent candidates
     # appear in same riding (N.B. sometimes it's called "No Affiliation")
     df.loc[df["Party"] == "No Affiliation", "Party"] = "Independent"
@@ -223,6 +215,39 @@ def split_vote_data(df_vote):
     }
 
 
+def make_candidate_map(df_vote):
+    """
+    Make a map from riding number to party to candidate name.
+
+    Parameters
+    ----------
+    df_vote : pd.DataFrame
+
+    Returns
+    -------
+    dict
+    """
+    candidate_map = {}
+    candidate_df = (df_vote[["DistrictNumber", "Party",
+                             "CandidateFirstName", "CandidateMiddleName",
+                             "CandidateLastName"]]
+                    .drop_duplicates()
+                    .fillna(""))
+    for fed_num, grp in candidate_df.groupby("DistrictNumber"):
+        candidate_map[fed_num] = {}
+        for party, candidate_row in grp.set_index("Party").iterrows():
+            candidate_map[fed_num][party] = (
+                f"{candidate_row['CandidateLastName']}, "
+                + f"{candidate_row['CandidateFirstName']}"
+            )
+            if len(candidate_row["CandidateMiddleName"]) > 0:
+                candidate_map[fed_num][party] += (
+                    f" {candidate_row['CandidateMiddleName']}"
+                )
+
+    return candidate_map
+
+
 def merge_eday_polls(merge_map, df_eday):
     """
     Merge election-day polls whose vote-counts are merged (due to
@@ -259,7 +284,7 @@ def merge_eday_polls(merge_map, df_eday):
         grp = grp.sort_values(["PD_NUM", "Poll"])
         retsrs = grp.iloc[0].copy()
         for col in ["Votes", "Electors",
-                    "RejectedBallots", "TotalVotes"]:
+                    "RejectedBallots"]:
             retsrs[col] = grp[col].sum()
         if "Poll" in grp.columns:
             retsrs["Poll"] = ", ".join(grp["Poll"].str.strip())
@@ -285,6 +310,7 @@ def pivot_vote_tables(df_vote, values_column="Votes"):
     Divite votes table into tables for each district and pivot them
     so that votes for each party form columns and each polling division
     a single row (instead of one row per party).
+    TODO: allow election-day + advance votes to be the values_column (pivot twice and sum dataframes)
 
     Parameters
     ----------
@@ -301,8 +327,8 @@ def pivot_vote_tables(df_vote, values_column="Votes"):
     for fed_num, grp in df_vote.groupby("DistrictNumber"):
         df_pivots[fed_num] = (
             grp[["DistrictName", "Poll", "PD_NUM",
-                 "Party", "Votes"]]
-            .pivot(index=["DistrictName", "Poll", "PD_NUM",],
+                 "Party", values_column]]
+            .pivot(index=["DistrictName", "Poll", "PD_NUM"],
                    columns="Party", values=values_column)
             .reset_index()
             .sort_values("PD_NUM")

@@ -17,7 +17,7 @@ from shapely import (MultiPolygon, Polygon, unary_union, coverage_union_all,
                      simplify)
 from .constants import codeprovs, datadir, areas, geometry_files, provcodes
 from .utils import (provs_from_ridings, validate_ridings, apply_riding_map,
-                    get_inv_riding_map, find_merge_sets)
+                    get_inv_riding_map)
 
 
 def load_geometries(ridings=None, area=None, year=2021, advance=False):
