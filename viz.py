@@ -12,7 +12,7 @@ import contextily as cx
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.ticker import StrMethodFormatter
-from .utils import get_inv_riding_map, party_difference
+from .utils import get_inv_riding_map
 from .geometry import merge_geometry_into_pivot_tables
 from .constants import partycolours, outputdir
 from .votes import pivot_vote_tables
@@ -95,6 +95,43 @@ def ridings_plot(gdf_ridings, year=2021, labels=False, title=None, **kwargs):
     return axobj
 
 
+def pivot_merge_and_concat(df_vote, gdf, values_column, party):
+    """
+    Construct pivot tables for each district and columns for each party,
+    merge geometries into all, and concatenate results
+
+    Parameters
+    ----------
+    df_vote : pd.DataFrame
+        with votes data
+    gdf : gpd.GeoDataFrame
+        with geometries for merging
+    values_column : str
+        column for values in pivot tables
+    party : list or str
+        names of parties to select
+
+    Returns
+    -------
+    pd.DataFrame
+    """
+    df_pivots = pivot_vote_tables(df_vote, values_column=values_column)
+    df_pivots = merge_geometry_into_pivot_tables(df_pivots, gdf)
+
+    if isinstance(party, str):
+        party = [party]
+
+    # select party column and concatenate riding tables
+    df_total = pd.concat(
+        [df[["DistrictName", "Poll", "PD_NUM", *party,
+             f"Total{values_column}", "geometry"]]
+         for df in df_pivots.values()],
+        ignore_index=True
+    )
+
+    return df_total
+
+
 def votes_plot(df_vote, gdf, party, gdf_ridings=None,
                plot_variable="VoteFraction",
                figwidth=None, ax=None, ridings_args=None, basemap=None,
@@ -132,21 +169,10 @@ def votes_plot(df_vote, gdf, party, gdf_ridings=None,
     -------
     matplotlib.pyplot.Axes
     """
-    # create pivot tables from votes and merge geometries
-    if plot_variable in ["Votes", "VoteFraction"]:
-        values_column = "Votes"
-    elif plot_variable in ["ElectionDayVotes", "ElectionDayVoteFraction"]:
+    if plot_variable in ["ElectionDayVotes", "ElectionDayVoteFraction"]:
         values_column = "ElectionDayVotes"
-
-    df_pivots = pivot_vote_tables(df_vote, values_column=values_column)
-    df_pivots = merge_geometry_into_pivot_tables(df_pivots, gdf)
-    # select party column and concatenate riding tables
-    df_total = pd.concat(
-        [df[["DistrictName", "Poll", "PD_NUM", party,
-              f"Total{values_column}", "geometry"]]
-         for df in df_pivots.values()],
-        ignore_index=True
-    )
+    else:
+        values_column = "Votes"
 
     if ax is None:
         if figwidth is None:
@@ -159,6 +185,8 @@ def votes_plot(df_vote, gdf, party, gdf_ridings=None,
 
         fig = plt.figure(figsize=(figwidth, figheight))
         ax = fig.gca()
+
+    df_total = pivot_merge_and_concat(df_vote, gdf, values_column, party)
 
     if plot_variable in ["VoteFraction", "ElectionDayVoteFraction"]:
         df_total[party] = (df_total[party]
@@ -208,6 +236,54 @@ def votes_plot(df_vote, gdf, party, gdf_ridings=None,
                            source=provider)
 
     return ax
+
+
+def make_party_comparison_df(df_vote, gdf, party1, party2,
+                             plot_variable):
+    """
+    Produce dataframe with columns for two parties with values
+
+    Parameters
+    ----------
+    df_vote : pd.DataFrame
+        unpivoted votes data table
+    gdf : gpd.GeoDataFrame
+        with geometries (to merge into vote pivots)
+    party1 : str
+        first party to compare
+    party2 : str
+        second party to compare
+    plot_variable : str
+        one of "VoteFraction", "Votes", "AllVoteFraction",
+               "PotentialVoteFraction"
+
+    Returns
+    -------
+    pd.DataFrame
+        table with columns for each party
+    """
+    if plot_variable in ["ElectionDayVotes", "ElectionDayVoteFraction"]:
+        values_column = "ElectionDayVotes"
+    else:
+        values_column = "Votes"
+
+    df_total = pivot_merge_and_concat(df_vote, gdf, values_column,
+                                      [party1, party2])
+
+    if "Fraction" in plot_variable:
+        # normalize values by total
+        df_total[party1] = (
+            df_total[party1]
+            .divide(df_total[f"Total{values_column}"])
+        )
+        df_total[party2] = (
+            df_total[party2]
+            .divide(df_total[f"Total{values_column}"])
+        )
+
+    df_total["Difference"] = (df_total[party1] - df_total[party2])
+
+    return df_total
 
 
 # noinspection PyTypeChecker
@@ -265,12 +341,6 @@ def votes_comparison_plot(df_vote, gdf, party1=None, party2=None,
         fig = plt.figure(figsize=(figwidth, figheight))
         ax = fig.gca()
 
-    # create pivot tables from votes and merge geometries
-    if plot_variable in ["Votes", "VoteFraction"]:
-        values_column = "Votes"
-    elif plot_variable in ["ElectionDayVotes", "ElectionDayVoteFraction"]:
-        values_column = "ElectionDayVotes"
-
     if party2 is None:
         df_most_votes = (df_vote
                          .loc[df_vote["Party"] != party1, ["Party", "Votes"]]
@@ -283,27 +353,8 @@ def votes_comparison_plot(df_vote, gdf, party1=None, party2=None,
         else:
             party2 = df_most_votes.index[0]
 
-    df_total = []
-
-    parties = [party1, party2]
-    for ii, party in enumerate(parties):
-        df_pivots = pivot_vote_tables(df_vote, values_column=values_column)
-        df_pivots = merge_geometry_into_pivot_tables(df_pivots, gdf)
-        # select party column and concatenate riding tables
-        df_total.append(pd.concat(
-            [df[["DistrictName", "Poll", "PD_NUM", party,
-                 f"Total{values_column}", "geometry"]]
-             for df in df_pivots.values()],
-            ignore_index=True
-        ))
-        if plot_variable in ["VoteFraction", "ElectionDayVoteFraction"]:
-            df_total[-1][party] = (
-                df_total[-1][party]
-                .divide(df_total[-1][f"Total{values_column}"])
-            )
-
-    df_total[0]["Difference"] = (df_total[0][parties[0]]
-                                 - df_total[1][parties[1]])
+    df_total = make_party_comparison_df(df_vote, gdf, party1, party2,
+                                        plot_variable)
 
     colour1 = partycolours.get(party1, "lightcoral")
     colour2 = partycolours.get(party2, "cadetblue")
@@ -313,13 +364,13 @@ def votes_comparison_plot(df_vote, gdf, party1=None, party2=None,
                               N=256))
 
     if crange_max is None:
-        crange_max = df_total[0]["Difference"].abs().max()
+        crange_max = df_total["Difference"].abs().max()
 
     if basemap is not None:
         # add some transparency so the basemap shows through
         kwargs["alpha"] = 0.7
 
-    ax = (df_total[0]
+    ax = (df_total
           .plot(column="Difference", legend=True,
                 vmin=-1 * crange_max, vmax=crange_max,
                 cmap=custom_cmap, ax=ax, **kwargs))
@@ -426,21 +477,36 @@ def multiyear_plot(canadavotes, years, name, party=None,
 
     # the following is to determine a common range of volues for
     # all plots based on ranges for all years
-    min_val = -1
-    max_val = 1
-    # min_val = 1e9
-    # max_val = -1e9
-    # if comparison:
-    #     for year in years:
-    #         df_vote = canadavotes[year]["vdf"][name]
-    #         gdf1 = party_difference(df_vote, plot_variable,
-    #                                 party1, party2)
-    #         max_val = max(gdf1["Difference"].abs().max(), max_val)
-    # else:
-    #     for year in years:
-    #         df_vote = canadavotes[year]["vdf"][name]
-    #         min_val = min(gdf_vote[plot_variable].min(), min_val)
-    #         max_val = max(gdf_vote[plot_variable].max(), max_val)
+    min_val = 1e10
+    max_val = -1e10
+
+    if comparison:
+        for year in years:
+            df_vote1 = canadavotes[year]["vdf"][name]
+            gdf1 = canadavotes[year]["gdf"][name]
+            df_total = make_party_comparison_df(df_vote1, gdf1, party1, party2,
+                                                plot_variable)
+            max_val = max(df_total["Difference"].abs().max(), max_val)
+
+    else:
+
+        if plot_variable in ["ElectionDayVotes", "ElectionDayVoteFraction"]:
+            values_column = "ElectionDayVotes"
+        else:
+            values_column = "Votes"
+
+        for year in years:
+            df_vote1 = canadavotes[year]["vdf"][name]
+            gdf1 = canadavotes[year]["gdf"][name]
+            df_total = pivot_merge_and_concat(df_vote1, gdf1,
+                                              values_column, party)
+
+            if "Fraction" in plot_variable:
+                df_total[party] = (df_total[party]
+                                   .divide(df_total[f"Total{values_column}"]))
+
+            min_val = min(df_total[party].min(), min_val)
+            max_val = max(df_total[party].max(), max_val)
 
     fig, axs = plt.subplots(nrows=nrows, ncols=ncols,
                             figsize=(figwidth, figheight))

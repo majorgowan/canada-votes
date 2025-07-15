@@ -192,13 +192,16 @@ class CanadaVotes:
         if year is None:
             year = list(self.data.keys())[0]
 
-        gdf_ridings = self.data[year]["gdf_ridings"]
+        gdf_ridings = self.data[year]["gdf"]["ridings"]
         if advance:
-            gdf_plot = self.data[year]["gdf_advance"]
+            vdf_plot = self.data[year]["vdf"]["advance"]
+            gdf_plot = self.data[year]["gdf"]["advance"]
         else:
-            gdf_plot = self.data[year]["gdf_eday_merged"]
+            vdf_plot = self.data[year]["vdf"]["eday_merged"]
+            gdf_plot = self.data[year]["gdf"]["eday_merged"]
 
-        ax = viz.votes_plot(gdf_plot, party=party, gdf_ridings=gdf_ridings,
+        ax = viz.votes_plot(vdf_plot, gdf_plot, party=party,
+                            gdf_ridings=gdf_ridings,
                             plot_variable=plot_variable,
                             ridings_args=ridings_args, basemap=basemap,
                             year=year, **kwargs)
@@ -216,13 +219,16 @@ class CanadaVotes:
         if year is None:
             year = list(self.data.keys())[0]
 
-        gdf_ridings = self.data[year]["gdf_ridings"]
+        gdf_ridings = self.data[year]["gdf"]["ridings"]
         if advance:
-            gdf_plot = self.data[year]["gdf_advance"]
+            vdf_plot = self.data[year]["vdf"]["advance"]
+            gdf_plot = self.data[year]["gdf"]["advance"]
         else:
-            gdf_plot = self.data[year]["gdf_eday_merged"]
+            vdf_plot = self.data[year]["vdf"]["eday_merged"]
+            gdf_plot = self.data[year]["gdf"]["eday_merged"]
 
-        ax = viz.votes_comparison_plot(gdf_plot, party1=party1, party2=party2,
+        ax = viz.votes_comparison_plot(vdf_plot, gdf_plot,
+                                       party1=party1, party2=party2,
                                        gdf_ridings=gdf_ridings,
                                        plot_variable=plot_variable,
                                        ridings_args=ridings_args,
@@ -244,11 +250,11 @@ class CanadaVotes:
             years = self.years[-4:]
 
         if advance:
-            gdf_vote_name = "gdf_advance"
+            name = "advance"
         else:
-            gdf_vote_name = "gdf_eday_merged"
+            name = "eday_merged"
 
-        fig = viz.multiyear_plot(self, years=years, gdf_vote_name=gdf_vote_name,
+        fig = viz.multiyear_plot(self, years=years, name=name,
                                  party=party, party1=party1, party2=party2,
                                  plot_variable=plot_variable,
                                  comparison=comparison,
@@ -266,7 +272,8 @@ class CanadaVotes:
             parties with candidates in the selected ridings
         """
         if len(self.data[year]["vdf"]) > 0:
-            return sorted(self.data[year]["vdf"]["Party"].unique().tolist())
+            return sorted(self.data[year]["vdf"]["eday"]["Party"]
+                          .unique().tolist())
         else:
             return []
 
@@ -320,6 +327,7 @@ class CanadaVotes:
                       .aggregate({"Votes": "sum"}))
                 # sum votes by riding
                 ridingsum = df.groupby(level="DistrictName").sum()
+                # divide candidate votes by total votes in district
                 df["VoteFraction"] = (
                     df.apply(lambda row: row["Votes"] / (ridingsum
                                                          .loc[row.name[-1],
