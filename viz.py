@@ -161,7 +161,7 @@ def pivot_merge_and_concat(df_vote, gdf, values_column, party):
 def votes_plot(df_vote, gdf, party, gdf_ridings=None,
                plot_variable="VoteFraction",
                figwidth=None, ax=None, ridings_args=None, basemap=None,
-               year=2021, **kwargs):
+               year=2021, smalltext=False, **kwargs):
     """
     visualize votes for single party by polling station
 
@@ -188,6 +188,8 @@ def votes_plot(df_vote, gdf, party, gdf_ridings=None,
         one of "Positron", "Voyager", "Mapnik"
     year : int
         election year (for title, riding map)
+    smalltext : bool
+        set to True for smaller and spacier labels
     kwargs
         keyword arguments to GeoDataFrame.plot()
 
@@ -246,6 +248,23 @@ def votes_plot(df_vote, gdf, party, gdf_ridings=None,
     # don't really need to know latitude and longitude values!
     ax.set_xticks([])
     ax.set_yticks([])
+
+    # label colorbar axis
+    if smalltext:
+        cbar_text_size = 10
+        cbar_ticklabel_size = 8
+        cbar_label_x = 5.6
+    else:
+        cbar_text_size = 12
+        cbar_ticklabel_size = 12
+        cbar_label_x = 3.3
+
+    cbar = plt.gcf().axes[-1]
+    cbar.set_title(f"{party} - {plot_variable}", y=0.5, x=cbar_label_x,
+                   va="center", size=cbar_text_size, rotation=-90)
+    cbar.tick_params(axis='y', which='major', labelsize=cbar_ticklabel_size)
+    cbar.yaxis.set_major_formatter(StrMethodFormatter('{x:.2f}'))
+
 
     if basemap is not None:
         # add basemap from web provider
@@ -589,7 +608,7 @@ def multiyear_plot(canadavotes, years, name, party=None,
                        ax=axs[row][col],
                        ridings_args=ridings_args, basemap=basemap,
                        year=year, vmin=min_val, vmax=max_val,
-                       **kwargs)
+                       smalltext=True, **kwargs)
 
         # position title inside top-left (election year)
         axs[row][col].set_title(f"{year}", fontsize=13, loc="left",
