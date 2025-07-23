@@ -52,52 +52,45 @@ def write_leaflet_data(cdvobj, year, filename, advance=True):
                             for (fn, party) in special_dict
                             if fn == fednum}
                    for fednum in fed_nums}
-    if not advance:
-        # election day viewer shows advance vote totals by riding
-        advance_dict = (cdvobj[year]["vdf"]["advance"]
-                        .get(["DistrictNumber", "Party", "Votes"])
-                        .groupby(["DistrictNumber", "Party"])
-                        .sum()
-                        .to_dict()["Votes"])
-        advance_map = {fednum: {party: advance_dict[(fn, party)]
-                                for (fn, party) in advance_dict
-                                if fn == fednum}
-                       for fednum in fed_nums}
-    else:
-        advance_map = None
+    # election day viewer shows advance vote totals by riding
+    advance_dict = (cdvobj[year]["vdf"]["advance"]
+                    .get(["DistrictNumber", "Party", "Votes"])
+                    .groupby(["DistrictNumber", "Party"])
+                    .sum()
+                    .to_dict()["Votes"])
+    advance_map = {fednum: {party: advance_dict[(fn, party)]
+                            for (fn, party) in advance_dict
+                            if fn == fednum}
+                   for fednum in fed_nums}
 
     # make "pivoted" frames with columns for each candidate in each riding
+    # separate pivot tables for election-day (pooled from polling divs)
+    # and advance votes and merge geometries accordingly
     if advance:
-        # separate pivot tables for election-day (pooled from polling divs)
-        # and advance votes
         pivoted_advance_vdfs = pivot_vote_tables(
             cdvobj[year]["vdf"]["advance"],
             values_column="Votes"
+        )
+        pivoted_advance_vdfs = merge_geometry_into_pivot_tables(
+            pivoted_advance_vdfs, cdvobj[year]["gdf"]["advance"]
         )
         pivoted_eday_vdfs = pivot_vote_tables(
             cdvobj[year]["vdf"]["advance"],
             values_column="ElectionDayVotes"
         )
-    else:
-        # only election-day data available at polling-div level
-        pivoted_advance_vdfs = None
-        pivoted_eday_vdfs = pivot_vote_tables(
-            cdvobj[year]["vdf"]["eday_merged"],
-            values_column="Votes"
-        )
-
-    # merge the geometries into the pivoted tables
-    if advance:
-        pivoted_advance_vdfs = merge_geometry_into_pivot_tables(
-            pivoted_advance_vdfs, cdvobj[year]["gdf"]["advance"]
-        )
         pivoted_eday_vdfs = merge_geometry_into_pivot_tables(
             pivoted_eday_vdfs, cdvobj[year]["gdf"]["advance"]
         )
     else:
+        # only election-day data available at polling-div level
+        pivoted_eday_vdfs = pivot_vote_tables(
+            cdvobj[year]["vdf"]["eday_merged"],
+            values_column="Votes"
+        )
         pivoted_eday_vdfs = merge_geometry_into_pivot_tables(
             pivoted_eday_vdfs, cdvobj[year]["gdf"]["eday_merged"]
         )
+        pivoted_advance_vdfs = None
 
     # build one big json!
     leaflet_data = {"polldata": {}}
@@ -116,11 +109,14 @@ def write_leaflet_data(cdvobj, year, filename, advance=True):
             for property in eday_dict["features"][poll]["properties"]:
                 if property not in ["DistrictName", "PD_NUM",
                                     "ADV_POLL_N", "Poll"]:
+                    # votes in eday poll division, or
+                    # pooled eday votes in the advance-poll division
                     feature_dict = {
                         "eday": (eday_dict["features"][poll]["properties"]
                                  .get(property))
                     }
                     if advance:
+                        # advance votes in the poll division
                         feature_dict["advance"] = (
                             advance_dict["features"][poll]["properties"]
                             .get(property)
@@ -138,11 +134,10 @@ def write_leaflet_data(cdvobj, year, filename, advance=True):
             "votes": eday_dict,
             "district_name": inv_riding_map[fed_num],
             "candidates": candidate_map[fed_num],
-            "special_votes": special_map[fed_num]
+            # riding-level totals of special and advance votes
+            "special_votes": special_map[fed_num],
+            "advance_votes": advance_map[fed_num]
         }
-        if not advance:
-            leaflet_data["polldata"][str(fed_num)]["advance_votes"] \
-                = advance_map[fed_num]
 
     # separate boundaries and centroids from ridings frame
     # (geojson format only supports one geometry-like column)
