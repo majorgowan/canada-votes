@@ -8,8 +8,11 @@ Email:   mark.fruman@yahoo.com
 """
 import os
 import geopandas as gpd
+
 from .constants import outputdir
+from .votes import pivot_vote_tables
 from .utils import get_inv_riding_map, write_json
+from .geometry import merge_geometry_into_pivot_tables
 
 
 def write_leaflet_data(cdvobj, year, filename, advance=True):
@@ -27,45 +30,20 @@ def write_leaflet_data(cdvobj, year, filename, advance=True):
         if True, write advance-poll geometry data (including eday votes),
         otherwise election-day (only eday votes)
     """
-    if advance:
-        gdf = (cdvobj.data[year]["gdf_advance"]
-               .get(["FED_NUM", "Poll",
-                     "geometry", "DistrictNumber",
-                     "CandidateLastName", "CandidateMiddleName",
-                     "CandidateFirstName", "Votes", "ElectionDayVotes"])
-               .rename(columns={"Votes": "AdvanceVotes"})
-               .reset_index().copy())
-    else:
-        gdf = (cdvobj[year]["gdf_eday_merged"]
-               .get(["FED_NUM", "Poll",
-                     "geometry", "DistrictNumber",
-                     "CandidateLastName", "CandidateMiddleName",
-                     "CandidateFirstName", "Votes"])
-               .reset_index().copy())
+    candidate_map = cdvobj[year]["candidate_map"]
 
-    gdf_ridings = cdvobj.data[year]["gdf_ridings"]
+    # get ridings table
+    gdf_ridings = cdvobj[year]["gdf"]["ridings"].copy()
     # add district names
-    gdf_ridings["DistrictName"] = (gdf_ridings
-                                   .index.map(get_inv_riding_map(year)))
-
-    # create json map from riding to party to condidates
-    candidate_map = {}
-    candidate_df = (gdf[["FED_NUM", "Party",
-                         "CandidateFirstName", "CandidateMiddleName",
-                         "CandidateLastName"]]
-                    .drop_duplicates())
-    for fed_num, grp in candidate_df.groupby("FED_NUM"):
-        grp = grp.drop("FED_NUM", axis=1)
-        candidate_map[fed_num] = {}
-        for party, candidate_row in grp.set_index("Party").iterrows():
-            candidate_map[fed_num][party] = (
-                    candidate_row["CandidateFirstName"] + " "
-                    + candidate_row["CandidateLastName"]
-            )
+    gdf_ridings["DistrictName"] = (gdf_ridings["FED_NUM"]
+                                   .map(get_inv_riding_map(year)))
+    # list of district numbers
+    fed_nums = gdf_ridings["FED_NUM"].unique()
+    inv_riding_map = {row["FED_NUM"]: row["DistrictName"]
+                      for _, row in gdf_ridings.iterrows()}
 
     # make map from riding to party to special votes
-    vdf = cdvobj.data[year]["vdf"].copy()
-    special_dict = (vdf[vdf["Poll"].str.startswith(" S")]
+    special_dict = (cdvobj[year]["vdf"]["special"]
                     .get(["DistrictNumber", "Party", "Votes"])
                     .groupby(["DistrictNumber", "Party"])
                     .sum()
@@ -73,79 +51,72 @@ def write_leaflet_data(cdvobj, year, filename, advance=True):
     special_map = {fednum: {party: special_dict[(fn, party)]
                             for (fn, party) in special_dict
                             if fn == fednum}
-                   for fednum in vdf["DistrictNumber"].unique()}
-    if not advance:
-        advance_dict = (vdf[vdf["Poll"].str.match(r"^ 6[0-9]{2}")]
-                        .get(["DistrictNumber", "Party", "Votes"])
-                        .groupby(["DistrictNumber", "Party"])
-                        .sum()
-                        .to_dict()["Votes"])
-        advance_map = {fednum: {party: advance_dict[(fn, party)]
-                                for (fn, party) in advance_dict
-                                if fn == fednum}
-                       for fednum in vdf["DistrictNumber"].unique()}
+                   for fednum in fed_nums}
+    # election day viewer shows advance vote totals by riding
+    advance_dict = (cdvobj[year]["vdf"]["advance"]
+                    .get(["DistrictNumber", "Party", "Votes"])
+                    .groupby(["DistrictNumber", "Party"])
+                    .sum()
+                    .to_dict()["Votes"])
+    advance_map = {fednum: {party: advance_dict[(fn, party)]
+                            for (fn, party) in advance_dict
+                            if fn == fednum}
+                   for fednum in fed_nums}
 
     # make "pivoted" frames with columns for each candidate in each riding
+    # separate pivot tables for election-day (pooled from polling divs)
+    # and advance votes and merge geometries accordingly
     if advance:
-        pivoted_advance_gdfs = {}
-
-    pivoted_eday_gdfs = {}
-    for fed_num in gdf["FED_NUM"].unique():
-        gdfa = gdf[gdf["FED_NUM"] == fed_num]
-
-        if advance:
-            pivoted_advance_gdfs[fed_num] = (
-                gdfa[["PD_NUM", "DistrictName", "geometry", "Party",
-                      "AdvanceVotes"]]
-                .pivot(index=["DistrictName", "PD_NUM", "geometry"],
-                       columns="Party", values="AdvanceVotes").reset_index()
-            )
-            pivoted_advance_gdfs[fed_num].columns.name = None
-            pivoted_advance_gdfs[fed_num]["TotalVotes"] = (
-                pivoted_advance_gdfs[fed_num].iloc[:, 3:].sum(axis=1)
-            )
-
-            pivoted_eday_gdfs[fed_num] = (
-                gdfa[["PD_NUM", "DistrictName", "geometry", "Party",
-                      "ElectionDayVotes"]]
-                .pivot(index=["DistrictName", "PD_NUM", "geometry"],
-                       columns="Party", values="ElectionDayVotes").reset_index()
-            )
-
-            pivoted_eday_gdfs[fed_num].columns.name = None
-            pivoted_eday_gdfs[fed_num]["TotalVotes"] = (
-                pivoted_eday_gdfs[fed_num].iloc[:, 3:].sum(axis=1)
-            )
-
-        else:
-            pivoted_eday_gdfs[fed_num] = (
-                gdfa[["PD_NUM", "DistrictName", "Poll", "geometry", "Party",
-                      "Votes"]]
-                .pivot(index=["DistrictName", "PD_NUM", "Poll", "geometry"],
-                       columns="Party", values="Votes").reset_index()
-            )
-
-            pivoted_eday_gdfs[fed_num].columns.name = None
-            pivoted_eday_gdfs[fed_num]["TotalVotes"] = (
-                pivoted_eday_gdfs[fed_num].iloc[:, 4:].sum(axis=1)
-            )
+        pivoted_advance_vdfs = pivot_vote_tables(
+            cdvobj[year]["vdf"]["advance"],
+            values_column="Votes"
+        )
+        pivoted_advance_vdfs = merge_geometry_into_pivot_tables(
+            pivoted_advance_vdfs, cdvobj[year]["gdf"]["advance"]
+        )
+        pivoted_eday_vdfs = pivot_vote_tables(
+            cdvobj[year]["vdf"]["advance"],
+            values_column="ElectionDayVotes"
+        )
+        pivoted_eday_vdfs = merge_geometry_into_pivot_tables(
+            pivoted_eday_vdfs, cdvobj[year]["gdf"]["advance"]
+        )
+    else:
+        # only election-day data available at polling-div level
+        pivoted_eday_vdfs = pivot_vote_tables(
+            cdvobj[year]["vdf"]["eday_merged"],
+            values_column="Votes"
+        )
+        pivoted_eday_vdfs = merge_geometry_into_pivot_tables(
+            pivoted_eday_vdfs, cdvobj[year]["gdf"]["eday_merged"]
+        )
+        pivoted_advance_vdfs = None
 
     # build one big json!
     leaflet_data = {"polldata": {}}
-    for fed_num in pivoted_eday_gdfs.keys():
+    for fed_num in pivoted_eday_vdfs.keys():
         if advance:
-            advance_dict = (gpd.GeoDataFrame(pivoted_advance_gdfs[fed_num])
+            advance_dict = (gpd.GeoDataFrame(pivoted_advance_vdfs[fed_num])
                             .to_geo_dict(drop_id=True))
-        eday_dict = (gpd.GeoDataFrame(pivoted_eday_gdfs[fed_num])
-                     .to_geo_dict(drop_id=True))
+        else:
+            advance_dict = None
+        eday_dict = (
+            gpd.GeoDataFrame(
+                pivoted_eday_vdfs[fed_num]
+                .rename(columns={"TotalElectionDayVotes": "TotalVotes"})
+            ).to_geo_dict(drop_id=True))
         for poll in range(len(eday_dict["features"])):
             for property in eday_dict["features"][poll]["properties"]:
-                if property not in ["DistrictName", "PD_NUM", "Poll"]:
+                if property not in ["DistrictName", "PD_NUM",
+                                    "ADV_POLL_N", "Poll"]:
+                    # votes in eday poll division, or
+                    # pooled eday votes in the advance-poll division
                     feature_dict = {
                         "eday": (eday_dict["features"][poll]["properties"]
                                  .get(property))
                     }
                     if advance:
+                        # advance votes in the poll division
                         feature_dict["advance"] = (
                             advance_dict["features"][poll]["properties"]
                             .get(property)
@@ -161,12 +132,12 @@ def write_leaflet_data(cdvobj, year, filename, advance=True):
 
         leaflet_data["polldata"][str(fed_num)] = {
             "votes": eday_dict,
+            "district_name": inv_riding_map[fed_num],
             "candidates": candidate_map[fed_num],
-            "special_votes": special_map[fed_num]
+            # riding-level totals of special and advance votes
+            "special_votes": special_map[fed_num],
+            "advance_votes": advance_map[fed_num]
         }
-        if not advance:
-            leaflet_data["polldata"][str(fed_num)]["advance_votes"] \
-                = advance_map[fed_num]
 
     # separate boundaries and centroids from ridings frame
     # (geojson format only supports one geometry-like column)

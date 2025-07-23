@@ -48,12 +48,6 @@ Ridings:
 	Davenport
 	Toronto--St. Paul's
 	Toronto--Danforth
-Election 2015 parties:
-	not loaded
-Election 2019 parties:
-	not loaded
-Election 2021 parties:
-	not loaded
 ```
 
 ```python
@@ -73,45 +67,11 @@ Ridings:
 	Davenport
 	Toronto--St. Paul's
 	Toronto--Danforth
-Election 2015 parties:
-	Animal Alliance/Environment Voters
-	Communist
-	Conservative
-	Green Party
-	Independent
-	Liberal
-	Libertarian
-	Marxist-Leninist
-	NDP-New Democratic Party
-	PACT
-	PC Party
-	The Bridge
-Election 2019 parties:
-	Animal Protection Party
-	Communist
-	Conservative
-	Green Party
-	Independent
-	Liberal
-	ML
-	NDP-New Democratic Party
-	Parti Rhinocéros Party
-	People's Party
-	Stop Climate Change
-Election 2021 parties:
-	Animal Protection Party
-	Communist
-	Conservative
-	Green Party
-	Independent
-	Liberal
-	NDP-New Democratic Party
-	People's Party - PPC
 ```
 
 ```python
 # add a riding and load again (i.e. update data)
-toronto.add_riding("Toronto--St. Paul's").load()
+toronto.add_riding("Eglinton--Lawrence").load()
 ```
 
 #### Some simple vote analysis
@@ -119,62 +79,68 @@ toronto.add_riding("Toronto--St. Paul's").load()
 # total votes across all ridings in area by party
 toronto.votes(by="Party", year=2021)
 ```
-| Party                    |   Votes |   TotalVotes |   VoteFraction |
-|:-------------------------|--------:|-------------:|---------------:|
-| Liberal                  |  120493 |       263894 |     0.456596   |
-| NDP-New Democratic Party |   78036 |       263894 |     0.29571    |
-| Conservative             |   45151 |       263894 |     0.171095   |
-| Green Party              |   11569 |       263894 |     0.0438396  |
-| People's Party - PPC     |    7491 |       263894 |     0.0283864  |
-| Communist                |     602 |       130472 |     0.00461402 |
-| Animal Protection Party  |     281 |        88997 |     0.00315741 |
-| Independent              |     271 |       134961 |     0.00200799 |
+| Party                    |   Votes |   VoteFraction |
+|:-------------------------|--------:|---------------:|
+| Liberal                  |  160137 |     0.464662   |
+| NDP-New Democratic Party |   91652 |     0.265942   |
+| Conservative             |   67909 |     0.197048   |
+| Green Party              |   14354 |     0.041650   |
+| People's Party - PPC     |    9353 |     0.027139   |
+| Communist                |     640 |     0.001857   |
+| Animal Protection Party  |     300 |     0.000870   |
+| Independent              |     123 |     0.000357   |
+| Independent-02           |      86 |     0.000250   |
+| Independent-01           |      77 |     0.000223   |
 
 ```python
-# total votes by individual candidate
-toronto.votes(by="Candidate", year=2021)
+# total votes by individual candidate, sorted by vote fraction
+toronto.votes(by="Candidate", key="VoteFraction", year=2021)
 ```
-
-|    | Candidate                     | Party                    | DistrictName         |   Votes |   TotalVotes |   VoteFraction |
-|---:|:------------------------------|:-------------------------|:---------------------|--------:|-------------:|---------------:|
-|  0 | Dabrusin, Julie  (Elected)    | Liberal                  | Toronto--Danforth    |   22675 |        46967 |     0.482786   |
-|  1 | Bennett, Carolyn  (Elected)   | Liberal                  | Toronto--St. Paul's  |   22270 |        45737 |     0.486914   |
-|  2 | Ien, Marci  (Elected)         | Liberal                  | Toronto Centre       |   21122 |        42030 |     0.502546   |
-|  3 | Freeland, Chrystia  (Elected) | Liberal                  | University--Rosedale |   19336 |        41475 |     0.466209   |
-|  4 | Dzerowicz, Julie  (Elected)   | Liberal                  | Davenport            |   18622 |        43997 |     0.423256   |
-|  5 | Bravo, Alejandra              | NDP-New Democratic Party | Davenport            |   18155 |        43997 |     0.412642   |
-|  6 | Vuong, Kevin  (Elected)       | Liberal                  | Spadina--Fort York   |   16468 |        43688 |     0.376946   |
-|  7 | Hacksel, Clare                | NDP-New Democratic Party | Toronto--Danforth    |   15554 |        46967 |     0.331169   |
-|  8 | Di Pasquale, Norm             | NDP-New Democratic Party | Spadina--Fort York   |   15384 |        43688 |     0.352133   |
-|  9 | Osadchuk, Stephanie           | Conservative             | Toronto--St. Paul's  |   11871 |        45737 |     0.259549   |
-| 10 | Chang, Brian                  | NDP-New Democratic Party | Toronto Centre       |   10901 |        42030 |     0.259362   |
-| 11 | Robicheau, Nicole             | NDP-New Democratic Party | University--Rosedale |   10556 |        41475 |     0.254515   |
-| 12 | Jandu, Sukhi                  | Conservative             | Spadina--Fort York   |    8993 |        43688 |     0.205846   |
-| 13 | Taylor, Steven                | Conservative             | University--Rosedale |    8465 |        41475 |     0.204099   |
-| 14 | Coles, Sidney                 | NDP-New Democratic Party | Toronto--St. Paul's  |    7486 |        45737 |     0.163675   |
-| 15 | Carey, Michael                | Conservative             | Toronto--Danforth    |    6087 |        46967 |     0.129602   |
-| 16 | Lester, Ryan                  | Conservative             | Toronto Centre       |    5146 |        42030 |     0.122436   |
-| 17 | Kalimbet, Jenny               | Conservative             | Davenport            |    4589 |        43997 |     0.104303   |
-| 18 | Paul, Annamie                 | Green Party              | Toronto Centre       |    3585 |        42030 |     0.0852962  |
-| 19 | De Luna, Phil                 | Green Party              | Toronto--St. Paul's  |    2784 |        45737 |     0.0608698  |
-| 20 | Grant, Tim                    | Green Party              | University--Rosedale |    1772 |        41475 |     0.0427245  |
-| 21 | Rosenstock, Amanda            | Green Party              | Spadina--Fort York   |    1477 |        43688 |     0.0338079  |
-| 22 | Dos Remedios, Tara            | People's Party - PPC     | Davenport            |    1457 |        43997 |     0.0331159  |
-| 23 | Roden, Ian                    | People's Party - PPC     | Spadina--Fort York   |    1366 |        43688 |     0.0312672  |
-| 24 | Remedios, Peter               | People's Party - PPC     | Toronto--St. Paul's  |    1326 |        45737 |     0.0289918  |
-| 25 | Simmons, Wayne                | People's Party - PPC     | Toronto--Danforth    |    1227 |        46967 |     0.0261247  |
-| 26 | Kent, David                   | People's Party - PPC     | University--Rosedale |    1117 |        41475 |     0.0269319  |
-| 27 | Currie, Adrian                | Green Party              | Davenport            |    1022 |        43997 |     0.0232289  |
-| 28 | Jaffery, Syed                 | People's Party - PPC     | Toronto Centre       |     998 |        42030 |     0.0237449  |
-| 29 | Tollar, Maryem                | Green Party              | Toronto--Danforth    |     929 |        46967 |     0.0197798  |
-| 30 | Garvie, Drew                  | Communist                | University--Rosedale |     229 |        41475 |     0.0055214  |
-| 31 | Rowley, Elizabeth             | Communist                | Toronto--Danforth    |     201 |        46967 |     0.0042796  |
-| 32 | White, Liz                    | Animal Protection Party  | Toronto--Danforth    |     175 |        46967 |     0.00372602 |
-| 33 | Byard, Ivan                   | Communist                | Toronto Centre       |     172 |        42030 |     0.00409232 |
-| 34 | Desai, Habiba                 | Independent              | Toronto--Danforth    |     119 |        46967 |     0.00253369 |
-| 35 | Stubbins, Peter               | Animal Protection Party  | Toronto Centre       |     106 |        42030 |     0.00252201 |
-| 36 | Young, Troy                   | Independent              | Davenport            |      82 |        43997 |     0.00186376 |
-| 37 | Kalevar, Chai                 | Independent              | Davenport            |      70 |        43997 |     0.00159102 |
+| Candidate                     | Party                    | DistrictName         |   Votes |   VoteFraction |
+|:------------------------------|:-------------------------|:---------------------|--------:|---------------:|
+| Bennett, Carolyn  (Elected)   | Liberal                  | Toronto--St. Paul's  |   26429 |     0.492178   |
+| Dabrusin, Julie  (Elected)    | Liberal                  | Toronto--Danforth    |   25214 |     0.483564   |
+| Mendicino, Marco  (Elected)   | Liberal                  | Eglinton--Lawrence   |   24051 |     0.484792   |
+| Ien, Marci  (Elected)         | Liberal                  | Toronto Centre       |   23071 |     0.503547   |
+| Freeland, Chrystia  (Elected) | Liberal                  | University--Rosedale |   22451 |     0.475304   |
+| Dzerowicz, Julie  (Elected)   | Liberal                  | Davenport            |   19930 |     0.421291   |
+| Bravo, Alejandra              | NDP-New Democratic Party | Davenport            |   19854 |     0.419684   |
+| Vuong, Kevin  (Elected)       | Liberal                  | Spadina--Fort York   |   18991 |     0.388992   |
+| Pollock, Geoff                | Conservative             | Eglinton--Lawrence   |   18082 |     0.364476   |
+| Hacksel, Clare                | NDP-New Democratic Party | Toronto--Danforth    |   17555 |     0.336677   |
+| Di Pasquale, Norm             | NDP-New Democratic Party | Spadina--Fort York   |   16834 |     0.344811   |
+| Osadchuk, Stephanie           | Conservative             | Toronto--St. Paul's  |   13587 |     0.253026   |
+| Robicheau, Nicole             | NDP-New Democratic Party | University--Rosedale |   11921 |     0.252376   |
+| Chang, Brian                  | NDP-New Democratic Party | Toronto Centre       |   11909 |     0.259925   |
+| Jandu, Sukhi                  | Conservative             | Spadina--Fort York   |    9875 |     0.20227    |
+| Taylor, Steven                | Conservative             | University--Rosedale |    9473 |     0.20055    |
+| Coles, Sidney                 | NDP-New Democratic Party | Toronto--St. Paul's  |    9036 |     0.168274   |
+| Carey, Michael                | Conservative             | Toronto--Danforth    |    6547 |     0.125561   |
+| Lester, Ryan                  | Conservative             | Toronto Centre       |    5571 |     0.121592   |
+| Kalimbet, Jenny               | Conservative             | Davenport            |    4774 |     0.100915   |
+| Senneker, Caleb               | NDP-New Democratic Party | Eglinton--Lawrence   |    4543 |     0.0915724  |
+| Paul, Annamie                 | Green Party              | Toronto Centre       |    3921 |     0.0855796  |
+| De Luna, Phil                 | Green Party              | Toronto--St. Paul's  |    3214 |     0.0598533  |
+| Grant, Tim                    | Green Party              | University--Rosedale |    1974 |     0.041791   |
+| Rosenstock, Amanda            | Green Party              | Spadina--Fort York   |    1645 |     0.0336945  |
+| Dos Remedios, Tara            | People's Party - PPC     | Davenport            |    1499 |     0.0316866  |
+| Frydman, Eric                 | Green Party              | Eglinton--Lawrence   |    1490 |     0.0300337  |
+| Roden, Ian                    | People's Party - PPC     | Spadina--Fort York   |    1476 |     0.0302329  |
+| Gleeson, Timothy              | People's Party - PPC     | Eglinton--Lawrence   |    1445 |     0.0291266  |
+| Remedios, Peter               | People's Party - PPC     | Toronto--St. Paul's  |    1432 |     0.0266677  |
+| Simmons, Wayne                | People's Party - PPC     | Toronto--Danforth    |    1282 |     0.0245867  |
+| Kent, David                   | People's Party - PPC     | University--Rosedale |    1172 |     0.0248121  |
+| Currie, Adrian                | Green Party              | Davenport            |    1087 |     0.0229776  |
+| Jaffery, Syed                 | People's Party - PPC     | Toronto Centre       |    1047 |     0.0228518  |
+| Tollar, Maryem                | Green Party              | Toronto--Danforth    |    1023 |     0.0196195  |
+| Garvie, Drew                  | Communist                | University--Rosedale |     244 |     0.00516566 |
+| Rowley, Elizabeth             | Communist                | Toronto--Danforth    |     215 |     0.00412336 |
+| White, Liz                    | Animal Protection Party  | Toronto--Danforth    |     183 |     0.00350965 |
+| Byard, Ivan                   | Communist                | Toronto Centre       |     181 |     0.0039505  |
+| Desai, Habiba                 | Independent              | Toronto--Danforth    |     123 |     0.00235894 |
+| Stubbins, Peter               | Animal Protection Party  | Toronto Centre       |     117 |     0.00255364 |
+| Young, Troy                   | Independent-02           | Davenport            |      86 |     0.00181791 |
+| Kalevar, Chai                 | Independent-01           | Davenport            |      77 |     0.00162767 |
 
 #### Plot vote results
 ```python
@@ -182,14 +148,14 @@ toronto.votes(by="Candidate", year=2021)
 toronto.plot_votes(party="Conservative", advance=False, year=2021,
                    plot_variable="VoteFraction")
 ```
-![downtown toronto e-day Conservative](images/downtown_eday_Conservative.png)
+![downtown toronto e-day Conservative](images/downtown_plusEL_eday_Conservative.png)
 
 ```python
 # compare Liberal and NDP vote fraction by advance poll (include election day votes)
 toronto.plot_compare(party1="Liberal", party2="NDP-New Democratic Party", year=2021,
-                     advance=True, plot_variable="AllVoteFraction")
+                     advance=True, plot_variable="TotalVoteFraction")
 ```
-![downtown toronto e-day Lib vs NDP](images/downtown_allvotes_Lib_v_NDP.png)
+![downtown toronto e-day Lib vs NDP](images/downtown_plusEL_advance_totalvotes_Lib_v_NDP.png)
 
 #### Add a basemap background to the figure
 ```python
@@ -198,17 +164,17 @@ toronto.plot_votes(party="People's Party - PPC", advance=False,
                    plot_variable="VoteFraction", year=2021,
                    basemap="Mapnik", figwidth=12)
 ```
-![downtown toronto e-day PPC Mapnik](images/downtown_eday_PPC_with_Mapnik.png)
+![downtown toronto e-day PPC Mapnik](images/downtown_plusEL_eday_PPC_with_Mapnik.png)
 
 #### Compare results over multiple elections
 ```python
 # compare results over three elections
 toronto.plot_multiyear(comparison=True, years=[2015, 2019, 2021],
                        party1="Liberal", party2="NDP-New Democratic Party", 
-                       advance=True, plot_variable="AllVoteFraction",
+                       advance=True, plot_variable="TotalVoteFraction",
                        figwidth=19, ridings_args={"labels": False})
 ```
-![downtown_toronto_Lib_vs_NDP_multiyear](images/downtown_allvotes_Lib_v_NDP_multiyear.png)
+![downtown_toronto_Lib_vs_NDP_multiyear](images/downtown_plusEL_advance_totalvotes_Lib_v_NDP_multiyear.png)
 
 #### Find ridings by proximity
 ```python
@@ -235,22 +201,14 @@ Ridings:
 	Esquimalt--Saanich--Sooke
 	Saanich--Gulf Islands
 	Cowichan--Malahat--Langford
-Election 2021 parties:
-	Animal Protection Party
-	Communist
-	Conservative
-	Green Party
-	Liberal
-	NDP-New Democratic Party
-	People's Party - PPC
 ```
 ```python
 # plot Green Party vs. NDP share over "Voyager" basemap
 victoria.plot_compare(party1="Green Party", party2="NDP-New Democratic Party", year=2021,
-                      advance=True, plot_variable="AllVoteFraction", basemap="Voyager",
+                      advance=True, plot_variable="TotalVoteFraction", basemap="Voyager",
                       figwidth=14)
 ```
-![victoria_proximity Green v NDP Voyager](images/victoria_allvotefrac_Green_v_NDP_with_Voyager.png)
+![victoria_proximity Green v NDP Voyager](images/victoria_advance_totalvotes_Green_v_NDP_with_Voyager.png)
 
 ## References:
 #### Maps of current electoral districts

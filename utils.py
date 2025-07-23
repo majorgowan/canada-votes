@@ -106,6 +106,40 @@ def find_merge_sets(df_vote):
     return merge_sets_dict
 
 
+def make_merge_map(df_eday, merge_sets_dict):
+    """
+    Construct mapping from district numbers to poll numbers to the merge-sets
+    they belong to (usually a singleton set), denoted by a string of the
+    form "FEDNUM_PDNUM" or "FEDNUM_MERGE_MERGEGRPNUM"
+
+    Parameters
+    ----------
+    df_eday : pd.DataFrame
+        with DistrictNumber, Poll, PD_NUM and MergedWith columns
+    merge_sets_dict : dict
+        mapping district number to list of sets of polls to be merged
+        (see find_merge_sets() function)
+
+    Returns
+    -------
+    dict
+    """
+    merge_map = {}
+    for fed_num in df_eday["DistrictNumber"].unique():
+        merge_map[fed_num] = {
+            pd_num: f"{fed_num}_{pd_num}" for pd_num
+            in df_eday.loc[df_eday["DistrictNumber"] == fed_num,
+            "PD_NUM"].unique()
+        }
+        if fed_num in merge_sets_dict:
+            merge_sets = merge_sets_dict[fed_num]
+            for iset, merge_set in enumerate(merge_sets):
+                for pd_num in merge_set:
+                    merge_map[fed_num][pd_num] = f"{fed_num}_merge_{iset:03d}"
+
+    return merge_map
+
+
 def write_json(obj, filename, **json_args):
     """
     Write the
@@ -326,55 +360,51 @@ def query_ridings(pattern, year=2021):
     return matches
 
 
-def party_difference(gdf_vote, plot_variable, party1, party2):
+def add_eday_votes(vdf_eday, vdf_adv, gdf):
     """
-    Given a GeoDataFrame with multiindex including "Party", return
-    single-party frame with "Difference" column representing the difference
-    between the two parties in terms of specified plot variable
+    Build a mapping from election-day polling division to advance polling
+    division (which is in the geometry tables) and use it to add election-day
+    votes corresponding to each advance poll division
 
     Parameters
     ----------
-    gdf_vote : GeoDataFrame
-        with data for plot_variable and two parties
-    plot_variable : str
-        name of column to compare
-    party1 : str
-        name of first party to compare
-    party2 : str
-        name of second party to compare
+    vdf_eday : pd.DataFrame
+        election-day votes table
+    vdf_adv : pd.DataFrame
+        advance votes table
+    gdf : gpd.GeoDataFrame
+        election-day geometry table
 
     Returns
     -------
-    GeoDataFrame
-        including "Difference" column
+    pd.DataFrame
+        advance-poll votes table with column for election-day votes
     """
+    # mapping from election-day to advance poll numbers
+    eday_to_advance_dict = {}
+    for fed_num, grp in gdf[["FED_NUM", "PD_NUM",
+                             "ADV_POLL_N"]].groupby("FED_NUM"):
+        eday_to_advance_dict[fed_num] = (grp.set_index("PD_NUM")
+                                         .apply(lambda row: row["ADV_POLL_N"],
+                                                axis=1)
+                                         .to_dict())
+    # convert the mapping to a series with same index as eday dataframe
+    vdf_eday_adv_poll_n_srs = (
+        vdf_eday
+        .apply(lambda row: (eday_to_advance_dict.get(row["DistrictNumber"], {})
+                            .get(row["PD_NUM"], 0)),
+               axis=1)
+    )
 
-    # select the subsets for the two parties
-    gdf1 = (gdf_vote
-            .xs(level="Party", key=party1)
-            .copy())
+    # sum election-day votes for each advance-poll division
+    vdf_adv["ElectionDayVotes"] = vdf_adv.apply(
+        lambda row: vdf_eday.loc[(vdf_eday["DistrictNumber"]
+                                  == row["DistrictNumber"])
+                                 & (vdf_eday_adv_poll_n_srs == row["PD_NUM"])
+                                 & (vdf_eday["Party"] == row["Party"]),
+                                 "Votes"].sum(),
+        axis=1
+    )
+    vdf_adv["TotalVotes"] = vdf_adv["Votes"] + vdf_adv["ElectionDayVotes"]
 
-    gdf2 = (gdf_vote
-            .xs(level="Party", key=party2)
-            .copy())
-
-    # check if indexes of the two party tables match (it won't if one
-    # or the other party is not represented in some locations, in which case
-    # the subtraction of the plot_variable will fail)
-    if not gdf1.index.equals(gdf2.index):
-        # compute a common index and apply it to each frame
-        index_union = gdf1.index.union(gdf2.index)
-        gdf1 = gdf1.reindex(index_union)
-        gdf2 = gdf2.reindex(index_union)
-
-        # fill the missing values of the plot_variable column with zeros
-        gdf1[plot_variable] = gdf1[plot_variable].fillna(0)
-        gdf2[plot_variable] = gdf2[plot_variable].fillna(0)
-
-        # fill the missing geometries with the values from the other party
-        gdf1["geometry"] = gdf1["geometry"].fillna(gdf2["geometry"])
-
-    # cmopute the difference and Bob should be your uncle
-    gdf1["Difference"] = gdf1[plot_variable] - gdf2[plot_variable]
-
-    return gdf1
+    return vdf_adv
