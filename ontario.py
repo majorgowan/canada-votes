@@ -79,6 +79,7 @@ def load_ontario_vote_data(year, ridings=None):
                if "French" in col], axis=1)
         .rename(columns={"EventNameEnglish": "EventName",
                          "ElectoralDistrictNameEnglish": "DistrictName",
+                         "AcceptedBallotCount": "Votes",
                          "NameOfCandidates": "Candidate"})
     )
     # make candidate name conform to "Given Names Last Name"
@@ -159,7 +160,7 @@ def load_ontario_vote_data(year, ridings=None):
     }
 
 
-def make_riding_map(df_votes, inverse=False):
+def make_ontario_riding_map(df_votes, inverse=False):
     if inverse:
         return {row["DistrictName"]: row["DistrictNumber"]
                 for dn, row
@@ -288,7 +289,7 @@ def merge_combined_with(df_votes, gdf):
                      "BallotsFromBoxesUnmarkedByVoters",
                      "BallotsDeclinedByVoters",
                      "NamesOnListOfElectors",
-                     "AcceptedBallotCount"]:
+                     "Votes"]:
             return_row[name] = grp[name].sum()
         return return_row
 
@@ -329,7 +330,7 @@ def pivot_and_merge_geometries(df_votes, gdf, normalize=False):
     for dnum in df_votes["DistrictNumber"].unique():
         df_pivot = (df_votes[(df_votes["DistrictNumber"] == dnum)
                          & (~df_votes["PollNumber"].str.contains("ADV"))]
-                    .pivot(values="AcceptedBallotCount",
+                    .pivot(values="Votes",
                            index=["DistrictNumber", "DistrictName",
                                   "PD_NUM", "PollNumber"],
                            columns="Party"))
