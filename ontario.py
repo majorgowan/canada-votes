@@ -47,13 +47,13 @@ def load_ontario_vote_data(year, ridings=None):
         with zf.open(official_return_file, "r") as orf:
             df_votes = pd.read_csv(orf)
 
-    # drop BiElection rows
+    # drop By Election rows
     df_interest = df_interest.loc[~df_interest["EventNameEnglish"]
-                                  .str.contains("By-elections")]
+                                  .str.contains(r"[bB]y.[eE]lection")]
     df_candidates = df_candidates.loc[~df_candidates["EventNameEnglish"]
-                                      .str.contains("By-elections")]
+                                      .str.contains(r"[bB]y.[eE]lection")]
     df_votes = df_votes.loc[~df_votes["EventNameEnglish"]
-                            .str.contains("By-elections")]
+                            .str.contains(r"[bB]y.[eE]lection")]
 
     # drop French columns
     df_interest = (
@@ -72,6 +72,7 @@ def load_ontario_vote_data(year, ridings=None):
                          "NameOfCandidates": "Candidate",
                          "PoliticalInterestCode": "PartyCode"})
     )
+    df_candidates["Candidate"] = df_candidates["Candidate"].str.upper()
 
     df_votes = (
         df_votes
@@ -87,9 +88,9 @@ def load_ontario_vote_data(year, ridings=None):
     def name_switch(s):
         split = s.upper().split(",")
         if len(split) == 2:
-            return split[1].strip() + " " + split[0].strip()
+            return (split[1].strip() + " " + split[0].strip()).upper()
         else:
-            return s
+            return s.upper()
     df_votes["Candidate"] = df_votes["Candidate"].map(name_switch)
 
     # extract district number from districtname in votes file
