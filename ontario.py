@@ -261,13 +261,13 @@ def merge_combined_with(df_votes, gdf):
     # drop any rows with non-integer CombinedWith values
     gdf_combined = gdf_combined[~(gdf_combined["CombinedWith"]
                                   .str.contains("ADV"))]
-    gdf_combined["PD_NUM"] = (gdf_combined["CombinedWith"]
-                              .map(lambda s: get_int_part(s)))
+    # sort values so dissolved PD_NUM gets assigned as in votes (see below)
+    gdf_combined = gdf_combined.sort_values(["DistrictNumber", "PD_NUM"])
     gdf_combined = robust_dissolve(
-        gdf_combined, by=["DistrictName", "PD_NUM"],
+        gdf_combined, by=["DistrictNumber", "CombinedWith"],
         aggfunc={c: (lambda col: col.iloc[0])
                  for c in gdf_combined.columns
-                 if c not in ["PD_NUM", "DistrictName",
+                 if c not in ["CombinedWith", "DistrictNumber",
                               "geometry"]}
     ).reset_index()
 
@@ -283,7 +283,7 @@ def merge_combined_with(df_votes, gdf):
                       + ", ".join([pn for pn in grp["PollNumber"].unique()
                                    if pn != target]))
         # use first row for general columns
-        return_row = grp.sort_values("PD_NUM", ascending=False).iloc[0].copy()
+        return_row = grp.sort_values(["PD_NUM"]).iloc[0].copy()
         return_row["PollNumber"] = pollnumber
         # sum these columns
         for name in ["BallotsFromBoxesRejectedAsMarkings",
