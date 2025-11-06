@@ -111,7 +111,7 @@ def load_geometries(ridings=None, area=None, year=2021, advance=False):
     return gdf
 
 
-def dissolve_ridings(gdf, robust=True):
+def dissolve_ridings(gdf, district_column="FED_NUM", robust=True):
     """
     combine polling station zones to whole ridings
 
@@ -119,6 +119,8 @@ def dissolve_ridings(gdf, robust=True):
     ----------
     gdf : gpd.GeoDataFrame
         dataframe with "geometries" and "FED_NUM" columns
+    district_column : str
+        name of column with district number
     robust : bool
         if True, use custom robust_dissolve() function
 
@@ -129,11 +131,12 @@ def dissolve_ridings(gdf, robust=True):
     """
     # join polygons of boundaries in each riding
     if robust:
-        gdf = (robust_dissolve(gdf[["FED_NUM", "geometry"]], by="FED_NUM")
+        gdf = (robust_dissolve(gdf[[district_column, "geometry"]],
+                               by=district_column)
                .reset_index())
     else:
-        gdf = (gdf[["FED_NUM", "geometry"]]
-               .dissolve(by="FED_NUM", method="coverage")
+        gdf = (gdf[[district_column, "geometry"]]
+               .dissolve(by=district_column, method="coverage")
                .reset_index())
 
     # switch coordinate system to extract centroid, then switch back

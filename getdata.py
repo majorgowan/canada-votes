@@ -212,6 +212,58 @@ def get_geometries(year=2021, overwrite=False):
     return pdf_result, shape_result
 
 
+def get_ontario(year=2022, overwrite=False):
+    """
+    Download data (votes and geometry) from Elections Ontario.
+
+    Parameters
+    ----------
+    year : int
+        election year, one of 2014, 2018, 2022, 2025
+    overwrite : bool
+        if True, overwrite previously downloaded file
+
+    Returns
+    -------
+    tuple
+        local filename(s) of download files
+    """
+    api_number_dict = {
+        2014: {
+            "report_group": 2,
+            "content_id": 489
+        },
+        2018: {
+            "report_group": 1,
+            "content_id": 933
+        },
+        2022: {
+            "report_group": 45,
+            "content_id": 1051
+        }
+    }
+    api_numbers = api_number_dict[year]
+    votes_url = ("https://results.elections.on.ca/api/"
+                      + f"report-groups/{api_numbers['report_group']}/"
+                      + f"report-outputs/{api_numbers['content_id']}/csv")
+
+    votes_file = download_file(votes_url,
+                               filename="Ontario_General_Election-csv.zip",
+                               prefix=f"{year}_")
+
+    geometry_url = ("https://www.elections.on.ca/content/dam/NGW/sitecontent/"
+                    + "2017/preo/shapefiles/Polling%20Division%20Shapefile%20"
+                    + f"-%20{year}%20General%20Election.zip")
+
+    geometry_file = download_file(
+        geometry_url,
+        filename="Ontario_Polling_Division_Shapefile.zip",
+        prefix=f"{year}_"
+    )
+
+    return (votes_file, geometry_file)
+
+
 def get_dataset(name):
     """
     Download dataset from internet

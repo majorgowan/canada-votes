@@ -13,6 +13,7 @@ from .constants import outputdir
 from .votes import pivot_vote_tables
 from .utils import get_inv_riding_map, write_json
 from .geometry import merge_geometry_into_pivot_tables
+from .ontario import make_ontario_riding_map, pivot_and_merge_geometries
 
 
 def write_leaflet_data(cdvobj, year, filename, advance=True):
@@ -104,7 +105,8 @@ def write_leaflet_data(cdvobj, year, filename, advance=True):
             gpd.GeoDataFrame(
                 pivoted_eday_vdfs[fed_num]
                 .rename(columns={"TotalElectionDayVotes": "TotalVotes"})
-            ).to_geo_dict(drop_id=True))
+            ).to_geo_dict(drop_id=True)
+        )
         for poll in range(len(eday_dict["features"])):
             for property in eday_dict["features"][poll]["properties"]:
                 if property not in ["DistrictName", "PD_NUM",
@@ -155,6 +157,91 @@ def write_leaflet_data(cdvobj, year, filename, advance=True):
                 .to_crs(crs=4326)[0])
     leaflet_data["centroid"] = {"longitude": centroid.x,
                                 "latitude": centroid.y}
+
+    write_json(leaflet_data,
+               filename=os.path.join(outputdir, filename),
+               indent=2)
+
+
+def write_leaflet_data_ontario(ovobj, year, filename):
+    """
+    Write json file readable by the web app for building Leaflet maps
+
+    Parameters
+    ----------
+    ovobj : OntarioVotes object
+    year : int
+        election year for which to write data
+    filename : str
+        filename to write
+    """
+    candidate_map = ovobj[year]["candidate_map"]
+
+    # get ridings table
+    gdf_ridings = ovobj[year]["gdf"]["ridings"].copy()
+    # add district names to riding table
+    inv_riding_map = make_ontario_riding_map(ovobj[year]["vdf"]["votes"],
+                                             inverse=False)
+    gdf_ridings["DistrictName"] = (gdf_ridings["DistrictNumber"]
+                                   .map(inv_riding_map))
+
+    # list of district numbers
+    dist_nums = gdf_ridings["DistrictNumber"].unique()
+
+    advance_dict = (ovobj[year]["vdf"]["votes"]
+                    .loc[(ovobj[year]["vdf"]["votes"]["PollNumber"]
+                          .str.contains("ADV"))]
+                    .get(["DistrictNumber", "Party", "Votes"])
+                    .groupby(["DistrictNumber", "Party"])
+                    .sum()
+                    .to_dict()["Votes"])
+    advance_map = {dist_num: {party: advance_dict[(dn, party)]
+                              for (dn, party) in advance_dict
+                              if dn == dist_num}
+                   for dist_num in dist_nums}
+
+    # make "pivoted" frames with columns for each candidate in each riding
+    # separate pivot tables and merge geometries accordingly
+    pivoted_vdfs = pivot_and_merge_geometries(
+        ovobj[year]["vdf"]["votes"],
+        ovobj[year]["gdf"]["stations"],
+        normalize=False
+    )
+
+    # build one big json!
+    leaflet_data = {"polldata": {}}
+    for dist_num in pivoted_vdfs.keys():
+        eday_dict = (
+            gpd.GeoDataFrame(
+                pivoted_vdfs[dist_num]
+            ).to_geo_dict(drop_id=True)
+        )
+        for poll in range(len(eday_dict["features"])):
+            for property in eday_dict["features"][poll]["properties"]:
+                if property not in ["DistrictNumber",
+                                    "DistrictName", "PD_NUM",
+                                    "PollNumber"]:
+                    # votes in eday poll division
+                    feature_dict = {
+                        "eday": (eday_dict["features"][poll]["properties"]
+                                 .get(property))
+                    }
+                    eday_dict["features"][poll]["properties"][property] \
+                        = feature_dict
+
+        leaflet_data["polldata"][str(dist_num)] = {
+            "votes": eday_dict,
+            "district_name": inv_riding_map[dist_num],
+            "candidates": candidate_map[dist_num],
+            "advance_votes": advance_map[dist_num]
+        }
+
+    # separate boundaries and centroids from ridings frame
+    # (geojson format only supports one geometry-like column)
+    leaflet_data["ridings"] = gdf_ridings.drop("centroid", axis=1).to_geo_dict()
+    leaflet_data["riding_centroids"] = (gdf_ridings.drop("geometry", axis=1)
+                                        .rename(columns={"centroid": "geometry"})
+                                        .to_geo_dict())
 
     write_json(leaflet_data,
                filename=os.path.join(outputdir, filename),
