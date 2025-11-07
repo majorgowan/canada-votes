@@ -20,7 +20,7 @@ from .utils import (provs_from_ridings, validate_ridings, apply_riding_map,
                     get_inv_riding_map)
 
 
-def load_geometries(ridings=None, area=None, year=2021, advance=False):
+def load_geometries(ridings=None, area=None, year=2025, advance=False):
     """
     load geopandas file and select subset of ridings
 
@@ -313,7 +313,7 @@ def robust_dissolve(gdf, by=None, aggfunc=None, verbose=False):
     return gdf
 
 
-def generate_provincial_geometries(year=2021):
+def generate_provincial_geometries(year=2025):
     """
     Split the country-wide file into province files (to save memory).
 
@@ -334,12 +334,20 @@ def generate_provincial_geometries(year=2021):
         print(f"please download shape file {eday_file} with get_geometries()")
         return
 
+    zipname = os.path.join(datadir, eday_file)
+    # check for subfolder inside zip file
+    with ZipFile(zipname) as zf:
+        if "/" in zf.namelist()[0]:
+            folder_name = zf.namelist()[0].split("/")[0]
+        else:
+            folder_name = None
+
     # load GeoDataFrame
     if layers is not None:
-        gdf_areas = gpd.read_file(os.path.join(datadir, eday_file),
+        gdf_areas = gpd.read_file(f"{zipname}!{folder_name}",
                                   layer=layers["areas"],
                                   encoding="latin1")
-        gdf_points = gpd.read_file(os.path.join(datadir, eday_file),
+        gdf_points = gpd.read_file(f"{zipname}!{folder_name}",
                                    layer=layers["points"],
                                    encoding="latin1")
         # set PD type to T ("triangle")
@@ -351,7 +359,7 @@ def generate_provincial_geometries(year=2021):
         )
         gdf = pd.concat((gdf_areas, gdf_points), ignore_index=True)
     else:
-        gdf = gpd.read_file(os.path.join(datadir, eday_file),
+        gdf = gpd.read_file(f"{zipname}!{folder_name}",
                             encoding="latin1")
 
     # for some reason, in 2019 columns were "FEDNUM" etc. but in 2015
@@ -429,12 +437,20 @@ def compute_riding_centroids(year):
         print(f"please download shape file {filename} with get_geometries()")
         return
 
+    zipname = os.path.join(datadir, filename)
+    # check for subfolder inside zip file
+    with ZipFile(zipname) as zf:
+        if "/" in zf.namelist()[0]:
+            folder_name = zf.namelist()[0].split("/")[0]
+        else:
+            folder_name = None
+
     # load GeoDataFrame
     if layers is not None:
         layer = layers["areas"]
     else:
         layer = None
-    gdf = gpd.read_file(os.path.join(datadir, filename),
+    gdf = gpd.read_file(f"{zipname}!{folder_name}",
                         layer=layer, encoding="latin1")
 
     # 2019 file has column "FEDNUM" instead of "FED_NUM"
@@ -508,7 +524,7 @@ def point_to_triangle(point, delta=100):
                           (point.x, point.y + 0.5 * delta)])
 
 
-def get_nearest_ridings(riding, n=10, year=2021):
+def get_nearest_ridings(riding, n=10, year=2025):
     """
     Get list of nearest ridings to given riding (by centroid distance)
 

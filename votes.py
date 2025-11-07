@@ -50,7 +50,9 @@ def load_vote_data_prov(year, province, ridings=None):
     ]
     dtype_map = {
         "Merge With/Fusionné avec": "str",
-        "Polling Station Number/Numéro du bureau de scrutin": "str"
+        "Polling Station Number/Numéro du bureau de scrutin": "str",
+        # name changed for 2025
+        "Combined with No./Résultats combinés à ceux du n°": "str"
     }
     # note below apparent repeated keys have different apostrophe characters
     # (to handle vote results tables from different years)
@@ -86,7 +88,15 @@ def load_vote_data_prov(year, province, ridings=None):
         "Void Poll Indicator/Indicateur de bureau supprimé":
             "VoidIndicator",
         "No Poll Held Indicator/Indicateur de bureau sans scrutin":
-            "NoPollIndicator"
+            "NoPollIndicator",
+        # some new names in 2025
+        "Polling Division Number/Numéro de section de vote": "Poll",
+        "Polling Division Name/Nom de section de vote": "PollStationName",
+        "Combined with No./Résultats combinés à ceux du n°": "MergedWith",
+        "Rejected Ballots for poll/Bulletins rejetés du bureau":
+            "RejectedBallots",
+        "Electors for poll/Électeurs du bureau": "Electors",
+        "Candidate Vote Count/Votes du candidat": "Votes"
     }
 
     # text encoding changes in 2015 (oh boy)

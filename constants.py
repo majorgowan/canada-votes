@@ -23,6 +23,8 @@ geometry_files = {
     2019: {"filename": "polling_divisions_boundaries_2019.shp.zip",
            "layers": None},
     2021: {"filename": "PD_CA_2021_EN.zip",
+           "layers": None},
+    2025: {"filename": "PollingDivisionBoundaries_2025_SHP.zip",
            "layers": None}
 }
 

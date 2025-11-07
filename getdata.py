@@ -64,7 +64,7 @@ def download_file(fileurl, filename=None, prefix="",
     return localpath
 
 
-def get_vote_data(province="ON", year=2021, overwrite=False):
+def get_vote_data(province="ON", year=2025, overwrite=False):
     """
     Download vote result data from elections.ca
 
@@ -73,7 +73,7 @@ def get_vote_data(province="ON", year=2021, overwrite=False):
     province : str
         two-letter abbreviation for the province
     year : int
-        election year (one of 2008, 2011, 2015, 2019, 2021)
+        election year (one of 2008, 2011, 2015, 2019, 2021, 2025)
     overwrite : bool
         if False (default), do not overwrite existing file
 
@@ -97,6 +97,9 @@ def get_vote_data(province="ON", year=2021, overwrite=False):
     elif year == 2021:
         base_url = ("https://www.elections.ca/"
                     + "res/rep/off/ovr2021app/53/data_donnees/")
+    elif year == 2025:
+        base_url = ("https://www.elections.ca/"
+                    + "res/rep/off/ovrGE45/62/data_donnees/")
     else:
         print(f"election year {year} not implemented")
         return
@@ -113,7 +116,7 @@ def get_vote_data(province="ON", year=2021, overwrite=False):
     return result
 
 
-def get_all_vote_data(year=2021, overwrite=False):
+def get_all_vote_data(year=2025, overwrite=False):
     """
     Download vote data from all provinces and territories
 
@@ -136,7 +139,7 @@ def get_all_vote_data(year=2021, overwrite=False):
     return ",".join(result_list)
 
 
-def get_geometries(year=2021, overwrite=False):
+def get_geometries(year=2025, overwrite=False):
     """
     Download GIS shapefiles for electoral districts
 
@@ -205,6 +208,14 @@ def get_geometries(year=2021, overwrite=False):
         # download shape files
         shape_result = download_file(urljoin(base_url, filename),
                                      overwrite=overwrite)
+    elif year == 2025:
+        base_url = ("https://www.elections.ca/res/cir/mapsCorner/vector/")
+        filename = "PollingDivisionBoundaries_2025_SHP.zip"
+        # data dictionary file is in the zip
+        pdf_result = None
+        # download shape files
+        shape_result = download_file(urljoin(base_url, filename),
+                                     overwrite=overwrite)
     else:
         print(f"year {year} not implemented")
         return None
@@ -212,7 +223,7 @@ def get_geometries(year=2021, overwrite=False):
     return pdf_result, shape_result
 
 
-def get_ontario(year=2022, overwrite=False):
+def get_ontario(year=2025, overwrite=False):
     """
     Download data (votes and geometry) from Elections Ontario.
 
@@ -240,6 +251,10 @@ def get_ontario(year=2022, overwrite=False):
         2022: {
             "report_group": 45,
             "content_id": 1051
+        },
+        2025: {
+            "report_group": 48,
+            "content_id": 1097
         }
     }
     api_numbers = api_number_dict[year]
