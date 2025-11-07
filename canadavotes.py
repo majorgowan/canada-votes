@@ -27,9 +27,9 @@ class CanadaVotes:
                 self.add_year(year)
 
     def add_year(self, year):
-        if year not in [2008, 2011, 2015, 2019, 2021]:
+        if year not in [2008, 2011, 2015, 2019, 2021, 2025]:
             print("year {year} invalid")
-            print("year must be one of: 2008, 2011, 2015, 2019, 2021")
+            print("year must be one of: 2008, 2011, 2015, 2019, 2021, 2025")
         if year not in self.years:
             self.years = sorted([year] + self.years)
             self._init_year(year)
