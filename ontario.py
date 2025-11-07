@@ -372,7 +372,7 @@ def make_candidate_map(df_candidates):
 
 
 class OntarioVotes:
-    def __init__(self, years=2022, ridings=None):
+    def __init__(self, years=2025, ridings=None):
         # initialize data to empty dictionary
         self.years = []
         self.data = {}
@@ -387,9 +387,9 @@ class OntarioVotes:
                 self.add_year(year)
 
     def add_year(self, year):
-        if year not in [2018, 2022]:
+        if year not in [2018, 2022, 2025]:
             print("year {year} invalid")
-            print("year must be one of: 2018, 2022")
+            print("year must be one of: 2018, 2022, 2025")
         if year not in self.years:
             self.years = sorted([year] + self.years)
             self._init_year(year)

@@ -223,7 +223,7 @@ def get_geometries(year=2025, overwrite=False):
     return pdf_result, shape_result
 
 
-def get_ontario(year=2022, overwrite=False):
+def get_ontario(year=2025, overwrite=False):
     """
     Download data (votes and geometry) from Elections Ontario.
 
@@ -251,6 +251,10 @@ def get_ontario(year=2022, overwrite=False):
         2022: {
             "report_group": 45,
             "content_id": 1051
+        },
+        2025: {
+            "report_group": 48,
+            "content_id": 1097
         }
     }
     api_numbers = api_number_dict[year]
